@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-19",
+  "artifacts": [
+    {
+      "file": "xlsx-0.20.3.min.js",
+      "url": "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+      "size": 951904,
+      "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41"
+    },
+    {
+      "file": "pdf-4.10.38.min.mjs",
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs",
+      "size": 352645,
+      "sha256": "27fc2a057a00f92a4334ad06e17dbd7259912954e9fb7f76400bcca5fd190a9c"
+    },
+    {
+      "file": "pdf.worker-4.10.38.min.mjs",
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs",
+      "size": 1375838,
+      "sha256": "1baa1844c89c80a5b2797c916e75ab29254be46d8e9cb53cb6364d7aad84be36"
+    },
+    {
+      "file": "pdf-4.4.168.min.mjs",
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs",
+      "size": 327044,
+      "sha256": "895c72c332dbd608a07ae54003e5e42741c566ade52ddbd2a00c8e57ffa35d9d"
+    },
+    {
+      "file": "pdf.worker-4.4.168.min.mjs",
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs",
+      "size": 1360964,
+      "sha256": "a7cf858ab0bbe21a00ef438c24a4ef5833c3d05935a294382c8d0773a8958f50"
+    },
+    {
+      "file": "xlsx-0.20.3-LICENSE",
+      "url": "https://cdn.sheetjs.com/xlsx-0.20.3/package/LICENSE",
+      "size": 11355,
+      "sha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+    },
+    {
+      "file": "pdfjs-4.10.38-LICENSE",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/v4.10.38/LICENSE",
+      "size": 10174,
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "file": "xlsx-0.18.5.reference.min.js",
+      "url": "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+      "size": 881727,
+      "sha256": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99",
+      "purpose": "compatibility-reference-only"
+    }
+  ]
+}

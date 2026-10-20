@@ -1,0 +1,14 @@
+{
+  "name": "Imported recovery base years",
+  "startYear": 2026,
+  "startMonth": 1,
+  "years": 10,
+  "areas": [{"id": "area", "name": "Building", "sf": 10000, "basis": true}],
+  "mlas": [{"id": "market", "name": "Market", "termYears": 5, "termMonths": 0}],
+  "recs": [{"id": "recovery", "name": "Base Year Stop", "method": "STOP", "denom": "rentable"}],
+  "tenants": [
+    {"id": "ax-import", "name": "Workbook +1 base year", "sf": 3000, "start": "2023-01", "end": "2030-12", "rent": 12, "baseYear": "2024", "rec": "recovery", "mla": "market"},
+    {"id": "x4-import", "name": "Workbook -1 base year", "sf": 3000, "start": "2023-01", "end": "2030-12", "rent": 12, "baseYear": "2022", "rec": "recovery", "mla": "market"},
+    {"id": "document-import", "name": "Document recovery base year", "sf": 4000, "start": "2023-01", "end": "2030-12", "rent": 12, "baseYear": "2024", "rec": "recovery", "mla": "market"}
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "sourceSha256": "25dab2c502539c97283890d8447603c8429ddb074f340fd78fdb525dd3c9da74",
+  "cases": {
+    "sample-nominal": {
+      "inputSha256": "e7348ddf2d4afaf92abeb0e89b0af1a891326e291cbd271dbb00263c00ccb38c",
+      "outputSha256": "ef807b79ef4e791a9425adae8101b7e4df09ba161fa72ccfed7aa31270f9030e"
+    },
+    "sample-effective": {
+      "inputSha256": "356a46deb3a9290bc6f7a212333ed08ec2baa3a6d98f1fb0904d48410ee8b6c2",
+      "outputSha256": "357134efbeb69baa7be50c38f7a0f16e6abe88773e4459d1a08fc9f3d3607dce"
+    },
+    "sample-annual": {
+      "inputSha256": "eef479882136b1255d2f62fddd84ea9a88d11aab8ecbd0fd2bc38c628b8da3bb",
+      "outputSha256": "86b76a33b9b0887f42eaa4988a1069e182c4e3d0792f04b2e909fcc01d5f400b"
+    },
+    "flat-annual": {
+      "inputSha256": "55fb375f88f889cd7b514192624fe93a04e48594f6263ae5c7856190f804fe56",
+      "outputSha256": "f243fab410d123fd5a2c1598d30171b5f7e6f2765b8e420c51cb7b66c38875ec"
+    },
+    "rent-step-and-free": {
+      "inputSha256": "6349a88eb7145f6c4639a2eed76b25d6597a58676a708e50c9fc16ed238e042e",
+      "outputSha256": "04f26eb0a5c0a5cbeb39bffc1e7cb131243c4fd3ca6f8986732246904c977c93"
+    },
+    "midmonth-commencement": {
+      "inputSha256": "d0ffe8489d859976e2ab04df2b94161d36a349baafd20dbc44339c1fc266f7d6",
+      "outputSha256": "aeb4d8eecbe0e173609c3a5c2d8f9778e48d7bffd67015098681dcbcd09c02e2"
+    },
+    "occupied-variable-expense": {
+      "inputSha256": "860dd5e7010b9d4fbed9679d14b90df3861af4553cd16905bd15b1582c7173c3",
+      "outputSha256": "3c15db5763d25672b1b8babbadfb0a9bb8a0685b2576ee665c0a9113194cf003"
+    },
+    "nnn-recovery": {
+      "inputSha256": "98294e8f30b6f0b6f1d1b2a804ae74d55669754f9c654c25925e7ec4508ddd0e",
+      "outputSha256": "0ab907d8c5e3e4fce5dca56b032d87b6f78962be0f3892e014d28e7ce8e7ce47"
+    },
+    "base-year-fixture": {
+      "inputSha256": "475786efd3369c5174218e311ca5fedab46317f7439dd7399e1493068fa61afb",
+      "outputSha256": "9e8395948c711f7c87fef57c2aa936292c04d962d552680a62684792028bf800"
+    },
+    "zero-discount": {
+      "inputSha256": "d5c05c418e475b3ba143df646f38c585d1fb7d441eeba6a7e9783846aece3cbc",
+      "outputSha256": "42743e7702324b96a09e30a73034c1e7f6337e51d1ffee137b77805514e59cdf"
+    },
+    "interest-only": {
+      "inputSha256": "0519519f06960779c3afd34e1ca496339ce5967e241a061738acf857c63cd0db",
+      "outputSha256": "de7ff734a788fde94e07c024db651cddc4464250f16055a04fee8b2b7d895799"
+    },
+    "amortizing-debt": {
+      "inputSha256": "ae9e5239a33e8fa642c904eabcac2ea6abcce7ef428b66bc6a514d5d59a5caca",
+      "outputSha256": "dc72dd6f79ab9f18521384600aa4f073ac3d6db09326ce54f6c993ae59c7fbfd"
+    },
+    "zero-interest-debt": {
+      "inputSha256": "4ccf918bfa6ddee10eb32f8b0086875ba3398fa4ab4a6ee1852a34bbdf809bd0",
+      "outputSha256": "60b23b064d932f7cf24bdf86623603362dbcad4335588986da1db6e2d704fef2"
+    },
+    "fully-amortized-debt": {
+      "inputSha256": "23234c3f0b64ff76007798902fe083568b067800e32b8726c6774a10657ffad3",
+      "outputSha256": "6c4f95a0480de6f443a51d6817728736667a98c3d93abe356bc809ff752e286c"
+    },
+    "future-floating-maturing-debt": {
+      "inputSha256": "df933667aa386e470716f36960ad7354eb095e0a01bec5395ee0b535a6976304",
+      "outputSha256": "ebdbd6ff21310e73dbde6c838f4429c13526f1c07e15a541236c31cabefeb619"
+    },
+    "area-index-inflation-start": {
+      "inputSha256": "a7e7904e45d027576ee4217fbe4df6c5fa5c90bbab7b5977f3faaea07ea6a35f",
+      "outputSha256": "5acbb2b7d72a5bf8debc6d4c480f7daa7f36cd7cbf69f5d6d0516bb27399ff40"
+    },
+    "staggered-portfolio-separate": {
+      "inputSha256": "cd8383aeb0a822e6a39a3372aceeb29694fee706888ebb61f14bb47fffd2b151",
+      "outputSha256": "742665730c1cfc27f9836bfe53feae0ed5da942402ac6a7db7654e8ba2b3a90a"
+    },
+    "staggered-portfolio-joint": {
+      "inputSha256": "539e299990c0c15c6691d9d862464580463354640e3726744be57c24a90326bb",
+      "outputSha256": "2e55499eceaba5650646f10c7421730573b344b579785e1265dd885e0b4e4fb5"
+    }
+  }
+}
