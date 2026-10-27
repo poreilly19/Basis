@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — GitHub Actions and Workers deployment setup
+## 0.7.28 — 2026-10-27 neutral workbook terminology
+
+- Replace product-specific workbook labels, internal navigation identifiers and documentation with neutral terminology while retaining input-template import/export and report-workbook features. Financial calculation behavior is unchanged; historical feature-inventory text is explicitly marked as edited for distribution.
+
+## 2026-10-27 — GitHub Actions and Workers deployment setup
 
 - Resolve runtime-cache paths in step contexts, where `runner.temp` is available, and pass `--cache` explicitly to runtime tests. Keep downloaded fixtures outside the checkout. This corrects the workflow setup rejection without changing application files or underwriting calculations.
 - Bind the Windows local preview server exclusively. A second launch now checks the running app identity instead of binding the occupied port and hanging; a different release retains the occupied-port explanation. Add a competing-listener regression without changing application HTML or financial calculations.
@@ -31,7 +35,7 @@
 - Restore Portfolio / Inputs / Reports modes and File / Home / View / Reports ribbon tabs. Match all 19 Home buttons and the View/Reports button labels, order, groups and icon placement to the supplied HTML.
 - Restore the left portfolio/building Navigator, scenario header, property grid sorting/grouping/classifications and blue save-status footer. Keep buildings and open tabs within the selected portfolio/scenario.
 - Wire ribbon controls to corrected library/scenario actions, the property wizard and native/legacy import/export workflows. Add keyboard-operated menus, focus retention and explicit async error handling; guard report opening against failed loads and context changes.
-- Keep Settings, AI Document Import, recovery, backup and portfolio metrics/chart accessible. The historical ARGUS Dump Package entry opens the current explicitly labeled JSON report export; historical workbook generation is not restored.
+- Keep Settings, AI Document Import, recovery, backup and portfolio metrics/chart accessible. The historical Report Workbook entry opens the current explicitly labeled JSON report export; historical workbook generation is not restored.
 - Add seven browser workflows for reference parity and restored control behavior, and adapt existing workflows to the visible ribbon. Financial engine, native codec, AI extraction, readers, storage and launchers are unchanged. See [layout details](docs/RIBBON_0_7_25.md) and [validation](docs/VALIDATION_0_7_25.md).
 
 ## 0.7.24 — 2026-10-27 supplied interface look and feel
@@ -135,7 +139,7 @@
 - Assign multiple tenant groups using a searchable checkbox dialog from Tenant Groups, Rent Roll classifications or Edit. Retain the compact Essentials view, keyboard focus, cancellation and stale-edit checks.
 - Preserve old scalar memberships and new arrays in native property/portfolio and Basis XLSX/JSON model files. Reject malformed arrays; distinguish blank workbook cells from explicit empty assignments. Keep dangling IDs visible and preserve other memberships when deleting a group.
 - Copy memberships independently into scenarios and contract renewals; show group names in Tenant Summary and basic report tenant tables. Count each tenant once per assigned group without changing financial calculations.
-- Restore the ARGUS/XL4ADW navigation entry and disclose the adapter's unsupported tenant classifications on import/export. Make Source Log CSV work outside the optional host service. Restrict the bulk NOI row to its labeled analysis years.
+- Restore the Workbook Import / Export navigation entry and disclose the adapter's unsupported tenant classifications on import/export. Make Source Log CSV work outside the optional host service. Restrict the bulk NOI row to its labeled analysis years.
 - Compare the reattached original ZIP with this release: no registered model/report pages, builders or default top-level model fields removed. Document inherited incomplete exports and remaining accuracy work in `docs/FEATURE_REVIEW_0_7_13.md`.
 - Add thirteen code cases and nine browser workflows; see `docs/VALIDATION_0_7_13.md` for completed checks and limits. The canonical financial engine is unchanged from 0.7.12.
 

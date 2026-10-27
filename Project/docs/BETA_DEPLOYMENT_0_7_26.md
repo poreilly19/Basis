@@ -8,11 +8,11 @@ The generated application has no login; the host must enforce tester access.
 
 ## Added workflows
 
-Open a property, then choose **Portfolio → Reports ribbon → ARGUS Dump Package → Download Report
+Open a property, then choose **Portfolio → Reports ribbon → Report Workbook → Download Report
 Workbook (.xlsx)**. The workbook contains README, Property Summary, Tenant Rent
 Roll, Tenant Summary, Cash Flow, All Terms Report, and Input Assumptions. The
 tables are independently arranged Basis reports; the historical five names do
-not imply a compatible vendor dump layout. The separate ARGUS / XL4ADW template
+not imply a compatible vendor dump layout. The separate XL4ADW input-template
 workflow is unchanged.
 
 The export recalculates one captured property/scenario snapshot. Changes while

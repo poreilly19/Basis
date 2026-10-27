@@ -29,7 +29,7 @@ function basisBuildReportPackage(model,result,context={}){
     ['Cash Flow','Analysis years begin in the model’s start month. Expense/outflow lines use negative values. Reference-only expense/capital records are excluded from cash-flow detail and retained in Input Assumptions. Forward NOI used for resale is separate from the hold-period cash flows.'],
     ['Tenant Summary','Year 1 modeled lease streams, including probability-weighted options. Property-level actual/budget overrides and vacancy may differ from tenant totals.'],
     ['Use','Review Model Checks, inputs and source documents before relying on results.'],
-    ['Interchange','Report workbook only. Use .basiscre for an editable model backup or the separate XL4ADW template workflow to send inputs to ARGUS.']
+    ['Interchange','Report workbook only. Use .basiscre for an editable model backup or the separate XL4ADW template workflow for supported input-workbook interchange.']
   ],[24,110]);
   const summary=sheet('Property Summary',[
     ['Metric','Value','Unit'],['Property',model.name||'',null],['Rentable Area',result.sf,area],['Present Value',result.pv,currency],
@@ -140,7 +140,7 @@ async function basisExportReport(format){
 function basisReportExportPane(){
   const busy=!!BASIS_REPORT_EXPORT.job;
   return el('div',{class:'studio-panel'},[el('h2',{text:'Report Package'}),el('p',{text:'Download an Excel workbook containing Property Summary, Tenant Summary, Tenant Rent Roll, Cash Flow, All Terms Report, and Input Assumptions. All sheets use one current property snapshot.'}),
-    el('p',{class:'hint',text:'This workbook contains calculated values and recorded assumptions. Use a .basiscre backup to reopen the complete model, or ARGUS / XL4ADW to fill an ARGUS input template.'}),
+    el('p',{class:'hint',text:'This workbook contains calculated values and recorded assumptions. Use a .basiscre backup to reopen the complete model, or Workbook Import / Export to fill a supported XL4ADW input template.'}),
     el('div',{class:'bar'},[el('button',{class:'btn p',text:busy?'Preparing Workbook…':'Download Report Workbook (.xlsx)',disabled:busy,onclick:exportDumpXlsx}),
       el('button',{class:'btn',text:'Export report tables (.json)',disabled:busy,onclick:exportDumpJson}),busy?el('button',{class:'btn',text:'Cancel Export',onclick:basisCancelReportExport}):null]),
     BASIS_REPORT_EXPORT.error?el('p',{class:'note err',role:'alert',text:BASIS_REPORT_EXPORT.error}):null,

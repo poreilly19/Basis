@@ -53,7 +53,7 @@ basic tenant tables in the Basis Reports download.
   old primary edit may disagree with the retained authoritative array.
 - Unknown group IDs remain saved and appear as **Missing Group: ID** in the
   picker, where they can be removed deliberately. They are not silently dropped.
-- The separate ARGUS/XL4ADW adapter does **not** import or export custom tenant
+- The separate XL4ADW workbook adapter does **not** import or export custom tenant
   classifications. Its preview now states that limitation. Use the native or
   Basis model formats to retain all assignments.
 

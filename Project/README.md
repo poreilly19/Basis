@@ -1,4 +1,9 @@
-# Basis Studio — reviewed Codex handoff (v7.27 beta candidate)
+# Basis Studio — reviewed Codex handoff (v7.28 beta candidate)
+
+Version 7.28 uses neutral workbook terminology throughout the application and
+distributed files. Use **Workbook Import / Export** for supported XL4ADW input
+templates and **Portfolio → Reports → Report Workbook** for calculated report
+exports. Existing financial calculation behavior is retained.
 
 The October 15–27, 2026 review adds data-integrity, security and financial fixes to
 the supplied v7 baseline. Read [the restored reference ribbon and left Navigator](docs/RIBBON_0_7_25.md),
@@ -11,7 +16,7 @@ portfolio/property subtitle beneath the logo. Version 7.12 compacts the Workspac
 adds an Essentials rent roll, and fixes AI setup drafts, upload keyboard access
 and save guidance; see [usability changes and next steps](docs/USABILITY_0_7_12.md)
 and [validation](docs/VALIDATION_0_7_12.md). Version 7.13 adds [multiple tenant
-groups](docs/TENANT_GROUPS.md), restores the ARGUS/XL4ADW navigation entry, fixes
+groups](docs/TENANT_GROUPS.md), restores the Workbook Import / Export navigation entry, fixes
 standalone Source Log CSV downloads and aligns bulk NOI rows with their year
 headings. See the [original-handoff comparison and accuracy priorities](docs/FEATURE_REVIEW_0_7_13.md)
 and [7.13 validation](docs/VALIDATION_0_7_13.md). Version 7.14 adds the lease editor
@@ -60,7 +65,7 @@ and allowlist still need configuration; the package itself provides no login.
 
 ## Preview the app
 
-Version 7.26 adds **Portfolio → Reports ribbon → ARGUS Dump Package → Download Report Workbook (.xlsx)**
+Version 7.26 adds **Portfolio → Reports ribbon → Report Workbook → Download Report Workbook (.xlsx)**
 and **Portfolio → Settings → Test AI Connection**. It also includes a minimal
 static hosting build. Read the [beta deployment handoff](docs/BETA_DEPLOYMENT_0_7_26.md)
 and [current validation](docs/VALIDATION_0_7_26.md). No site has been published;

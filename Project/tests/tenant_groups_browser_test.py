@@ -180,8 +180,8 @@ class TenantGroupsBrowserTests(unittest.TestCase):
         self.assertTrue(any('Tenant group classifications are not exported' in note for note in result['notes']))
         self.assertTrue(any('Tenant group classifications from XL4ADW are not imported' in note for note in result['importWarnings']))
         self.page.get_by_role('tab', name='Data Workspace', exact=True).click()
-        self.page.get_by_role('tab', name='ARGUS / XL4ADW', exact=True).click()
-        expect(self.page.locator('#pane')).to_contain_text('ARGUS import')
+        self.page.get_by_role('tab', name='Workbook Import / Export', exact=True).click()
+        expect(self.page.locator('#pane')).to_contain_text('Workbook import')
 
     def test_source_log_csv_downloads_without_host_service(self):
         self.page.evaluate("S.srcLog=[{at:'2026-10-21',target:'Tenant',value:'=1+1',doc:'lease.pdf',page:'2',quote:'Original source'}];go('tools','import')")

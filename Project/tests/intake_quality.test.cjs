@@ -17,6 +17,48 @@ function setup(){
 }
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-7,`expected ${expected}, received ${actual}`);
 
+test('valuation reports retain document precedence and evidence when marketing materials disagree',()=>{
+  const run=setup();run(`const report={id:'model-report',name:'Valuation report.pdf',pages:[],results:[{
+    docType:'valuation_report',property:{rentableSF:1000},valuation:{exitCap:0.06}}]};
+    const brochure={id:'brochure',name:'Offering memorandum.pdf',pages:[],results:[{
+      docType:'offering_memorandum',property:{rentableSF:1200},valuation:{exitCap:0.07}}]};`);
+  for(const order of ['[report,brochure]','[brochure,report]']){
+    const result=run(`intMerge(${order})`);
+    assert.equal(result.property.rentableSF.v,1000);
+    assert.equal(result.valuation.exitCap.v,0.06);
+    assert.equal(result.valuation.exitCap.src.docType,'valuation_report');
+    assert.equal(result.valuation.exitCap.src.doc,'Valuation report.pdf');
+    assert.equal(result.conflicts.length,2);
+    assert.ok(result.conflicts.every(c=>c.others.some(o=>o.src.doc==='Offering memorandum.pdf')));
+  }
+});
+
+test('unrecognized report categories stay below recognized sources without rewriting raw extraction',()=>{
+  const run=setup();run(`const future={id:'future',name:'Unrecognized report.pdf',pages:[],results:[{
+    docType:'future_report',valuation:{exitCap:0.06}}]};
+    const marketing={id:'marketing',name:'Offering memorandum.pdf',pages:[],results:[{
+      docType:'offering_memorandum',valuation:{exitCap:0.07}}]};
+    const beforeFuture=JSON.stringify(future.results);`);
+  const result=run('intMerge([future,marketing])');
+  assert.equal(result.valuation.exitCap.v,0.07);
+  assert.equal(result.valuation.exitCap.src.docType,'offering_memorandum');
+  assert.equal(result.conflicts[0].others[0].src.docType,'other');
+  assert.equal(result.conflicts[0].others[0].src.doc,'Unrecognized report.pdf');
+  assert.equal(run('JSON.stringify(future.results)'),run('beforeFuture'));
+});
+
+test('unknown and inherited document-type names cannot outrank a recognized valuation report',()=>{
+  const run=setup();
+  for(const type of ['unknown','future_report','constructor','__proto__','toString',null,17]){
+    const result=run(`intMerge([
+      {id:'unknown',name:'Unknown source',pages:[],results:[{docType:${JSON.stringify(type)},valuation:{exitCap:0.1}}]},
+      {id:'report',name:'Valuation report.pdf',pages:[],results:[{docType:'valuation_report',valuation:{exitCap:0.06}}]}
+    ])`);
+    assert.equal(result.valuation.exitCap.v,0.06);
+    assert.equal(result.conflicts[0].others[0].src.docType,'other');
+  }
+});
+
 test('base lease plus amendment retains duration, percentage, expiry and each monthly cash flow',()=>{
   const run=setup(),before=run('JSON.stringify(S)'),result=run('prepare()'),t=result.model.tenants[0],expected=fixture.expected;
   assert.deepEqual([t.end,t.free,t.freeStart,t.freePct,t.freeType],[expected.expiry,expected.freeMonths,expected.freeStart,expected.freePct,expected.freeType]);

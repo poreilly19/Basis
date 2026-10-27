@@ -66,6 +66,6 @@ a stale target or limit error leaves the whole batch unchanged. Selection and
 filter state belongs to the current model and is kept outside saved files.
 
 Native schema-v1 and existing Basis workbook/JSON group round-trips are unchanged.
-The ARGUS/XL4ADW adapter still does not carry custom tenant groups.
+The XL4ADW workbook adapter still does not carry custom tenant groups.
 
 See [validation](VALIDATION_0_7_14.md) for measured checks and remaining limits.

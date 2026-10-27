@@ -39,7 +39,7 @@ reattached ZIP. Work was performed in the chat workspace.
   unresolved IDs remain visible and HTML-like names render as text.
 - Tenant Summary and bulk tenant tables include group names. Bulk report rows
   match their headings, and the NOI export excludes the unlabeled forward year.
-  The ARGUS/XL4ADW panel is reachable through navigation and warns about unsupported
+  The Workbook Import / Export panel is reachable through navigation and warns about unsupported
   custom classifications on both import and export.
 - Source Log CSV downloads without a host service and retains source content
   while neutralizing spreadsheet formula-like text.

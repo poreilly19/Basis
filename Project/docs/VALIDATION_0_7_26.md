@@ -99,7 +99,7 @@ CORS policies, model quality or billing behavior.
 - Use a user-owned API key locally for a live connection/extraction check.
   Analyst-reviewed representative leases, rent rolls and P&Ls and a broader
   independent financial benchmark are still needed.
-- The report workbook is a Basis report, not a guaranteed ARGUS dump-layout
+- The report workbook is a Basis report, not a guaranteed third-party report-layout
   equivalent or native model backup. The legacy JSON report remains minimal.
 - Some calculation and workbook-serialization paths remain synchronous; large
   portfolios need performance testing at the intended beta size.

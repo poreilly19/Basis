@@ -6,7 +6,7 @@ const {test}=require('node:test');
 const {DOMParser}=require('./office_dom.cjs');
 const root=path.join(__dirname,'..'),html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
 function part(start,end){const a=html.indexOf(start),b=html.indexOf(end,a);assert.ok(a>=0&&b>a,'Office XML extraction boundaries must exist');return html.slice(a,b);}
-const source=fs.readFileSync(path.join(root,'src/office_zip.js'),'utf8')+'\n'+part('const intXML=','/* BEGIN BASIS PDF LOADER */')+'\n'+part('const x4unesc=','// Assemble with verified ARGUS defaults');
+const source=fs.readFileSync(path.join(root,'src/office_zip.js'),'utf8')+'\n'+part('const intXML=','/* BEGIN BASIS PDF LOADER */')+'\n'+part('const x4unesc=','// Assemble with verified workbook defaults');
 const REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const WORD='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function setup(parts={},overrides={}){

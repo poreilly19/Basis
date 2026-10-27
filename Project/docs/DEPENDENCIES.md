@@ -37,11 +37,13 @@ confirmation that an exploit was reproduced against this application:
 
 ## Provenance and interoperability boundaries
 
-`docs/DEV_HISTORY.md` already records historical use of competitor behavior,
-documentation, examples and screenshots. Source comments still refer to CBRE
-training slides in `calcPositions`, scrub metrics and report organization; other
-comments and UI strings describe ARGUS report layouts and workflows. Preserve
-that evidence for review. Renaming labels alone does not verify provenance.
+`docs/DEV_HISTORY.md` records historical use of commercial third-party behavior,
+documentation, examples and screenshots. Source comments refer to training
+slides in `calcPositions`, scrub metrics and report organization; earlier
+comments and UI strings also described third-party report layouts and workflows.
+The distributed wording is now neutral, and the historical feature inventory
+marks its edited text. Preserve original source evidence for review. Renaming
+labels alone does not verify provenance or establish legal clearance.
 Inventory the origin and rights for each reference, workbook template, report
 layout and sample data set; replace distinctive expression with independently
 specified workflows where necessary. No public license was selected by this review.

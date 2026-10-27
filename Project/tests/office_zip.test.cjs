@@ -8,7 +8,7 @@ const {DOMParser}=require('./office_dom.cjs');
 
 const root=path.join(__dirname,'..'),source=fs.readFileSync(path.join(root,'src/office_zip.js'),'utf8'),html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
 const functionText=(start,end)=>{const a=html.indexOf(start),b=html.indexOf(end,a);assert.ok(a>=0&&b>a,'Office ZIP adapter boundaries must exist');return html.slice(a,b);};
-const adapters=functionText('async function intUnzip(buf){','const intXML=')+functionText('const intXML=','// ---- Word:')+functionText('async function x4Unzip(buf){','// Assemble with verified ARGUS defaults')+functionText('function x4CellXml(','/* ---- ARGUS XL4ADW input workbook');
+const adapters=functionText('async function intUnzip(buf){','const intXML=')+functionText('const intXML=','// ---- Word:')+functionText('async function x4Unzip(buf){','// Assemble with verified workbook defaults')+functionText('function x4CellXml(','/* ---- XL4ADW input workbook');
 function setup(overrides={}){
   const context=vm.createContext({TextEncoder,TextDecoder,Uint8Array,Uint32Array,ArrayBuffer,DataView,Blob,DecompressionStream,DOMParser,...overrides});
   vm.runInContext(source+'\n'+adapters,context,{filename:'basis-office-zip.js'});

@@ -12,7 +12,7 @@ const source=[
   part('async function intFitImage(file,lim){','let _intLim='),
   part('async function intAdd(files){','// ---- what Claude is asked for ----'),
   part('async function axeReadTemplate(f){','async function axeBuild()'),
-  part('async function axReadFile(f){','PANES["tools.argus"]='),
+  part('async function axReadFile(f){','PANES["tools.workbook"]='),
   part('function pfOpen(st){','PANES["tools.file"]=')
 ].join('\n');
 const MiB=1024*1024;
@@ -93,11 +93,11 @@ test('template selection publishes only the latest success/error and clearing in
   context.a={name:'bad.xlsx',arrayBuffer:async()=>{throw Error('current failure');}};await run('axeReadTemplate(a)');assert.equal(context.AXE.err,'current failure');assert.equal(context.AXE.busy,false);
 });
 
-test('ARGUS import selection ignores stale successes/errors and discard invalidates pending work',async()=>{
+test('Workbook import selection ignores stale successes/errors and discard invalidates pending work',async()=>{
   const {context,run}=setup(),a=deferred(),b=deferred();context.a={name:'A.xlsx',arrayBuffer:()=>a.promise};context.b={name:'B.xlsx',arrayBuffer:()=>b.promise};
   const old=run('axReadFile(a)'),latest=run('axReadFile(b)');b.resolve({name:'B property'});await latest;a.resolve({name:'A property'});await old;
   assert.equal(context.AXU.file,'B.xlsx');assert.equal(context.AXU.I.S.name,'B property');assert.equal(context.AXU.busy,false);
-  const stale=deferred();context.a={name:'old.xlsx',arrayBuffer:()=>stale.promise};const pending=run('axReadFile(a)');run('iReadArgusClear()');stale.reject(Error('late failure'));await pending;
+  const stale=deferred();context.a={name:'old.xlsx',arrayBuffer:()=>stale.promise};const pending=run('axReadFile(a)');run('clearWorkbookImport()');stale.reject(Error('late failure'));await pending;
   assert.equal(context.AXU.I,null);assert.equal(context.AXU.err,'');assert.equal(context.AXU.busy,false);
 });
 

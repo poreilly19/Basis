@@ -25,7 +25,7 @@ arrangement and group captions:
 
 **View** restores Navigator/Classifications toggles, grouping, Clear Search and
 Grouping, and Light / Dark. **Reports** restores Combined Cash Flow, Portfolio
-Value, Property List, Open in Reports, and the ARGUS Dump Package entry.
+Value, Property List, Open in Reports, and the Report Workbook entry.
 **File** restores Back, New Portfolio, New Property, New Scenario, Open Property,
 Import, Export Portfolio, Options, About Basis and Recent Properties. Current
 recovery, library reload, document import and backup controls remain below them.
@@ -55,13 +55,15 @@ inputs survive background redraws. Failed inclusion and calculation writes show
 recoverable errors. Report opening checks that the intended property loaded and
 that its portfolio/scenario is still selected.
 
-The **ARGUS Dump Package** ribbon label is retained to match the reference. It
-opens the current Basis Reports page, which explicitly offers semantic report
+The report-package ribbon entry (now labeled **Report Workbook**) opened the
+Basis Reports page in this version, which explicitly offered semantic report
 tables as **JSON**. This release does not reintroduce the historical dump-workbook
 export. The Export menu names the actual JSON format; other export entries open
 the corrected native/legacy export dialog or XL4ADW tools. New Property opens the
 current guided setup rather than instantly creating a blank record. Options
-opens the current Settings page.
+opens the current Settings page. Historical product-specific captions in this
+note have been generalized for distribution; this paragraph describes 0.7.25,
+before the Excel report-workbook export added in 0.7.26.
 
 No financial engine, native codec/schema, extraction/provider/reader module,
 storage module, sample model, launcher or runtime dependency is replaced by code

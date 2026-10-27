@@ -14,7 +14,7 @@ class RibbonBrowserTests(unittest.TestCase):
         return self.page.locator('.ribbon')
 
     def test_reference_button_order_groups_and_left_navigator(self):
-        # Transcribed from the supplied HTML, SHA 8a63732e...ddf3e.
+        # Arrangement from the supplied HTML, SHA 8a63732e...ddf3e, with neutral workbook labels.
         expected = {
             'Home': [('New', ['New Portfolio', 'New Property', 'New Scenario']),
                      ('Property', ['Open Property', 'Duplicate Records', 'Copy To…', 'Move To…', 'Delete Records']),
@@ -25,7 +25,7 @@ class RibbonBrowserTests(unittest.TestCase):
             'View': [('Show / Hide', ['Hide Navigator', 'Show Classifications']),
                      ('Arrange', ['Clear search and grouping']), ('Window', ['Light / Dark'])],
             'Reports': [('Portfolio Reports', ['Combined Cash Flow', 'Portfolio Value', 'Property List']),
-                        ('Property Reports', ['Open in Reports', 'ARGUS Dump Package'])]
+                        ('Property Reports', ['Open in Reports', 'Report Workbook'])]
         }
         self.page.set_viewport_size({'width': 1440, 'height': 900})
         self.assertEqual(self.page.locator('.rtabs button').all_text_contents(), ['File', 'Home', 'View', 'Reports'])
@@ -83,8 +83,14 @@ class RibbonBrowserTests(unittest.TestCase):
         expect(self.page.get_by_role('button', name='Configure AI', exact=True)).to_be_visible()
         expect(self.page.get_by_role('tab', name='Document Import', exact=True)).to_have_attribute('aria-selected', 'true')
         imp.click()
-        menu.get_by_role('menuitem', name='ARGUS XL4ADW export or dump package…', exact=True).click()
-        self.assertEqual(self.page.evaluate('[MODE,T1,T2]'), ['inputs', 'tools', 'argus'])
+        menu.get_by_role('menuitem', name='Workbook template or report package…', exact=True).click()
+        self.assertEqual(self.page.evaluate('[MODE,T1,T2]'), ['inputs', 'tools', 'workbook'])
+        expect(self.page.get_by_role('tab', name='Workbook Import / Export', exact=True)).to_have_attribute('aria-selected', 'true')
+        self.page.locator('#modeSeg').get_by_role('button', name='Portfolio', exact=True).click()
+        self.ribbon().get_by_role('button', name='Export', exact=True).click()
+        self.page.get_by_role('menuitem', name='Input workbook template of the open property…', exact=True).click()
+        self.assertEqual(self.page.evaluate('[MODE,T1,T2]'), ['inputs', 'tools', 'workbook'])
+        expect(self.page.locator('#pane')).to_contain_text('Workbook export')
 
     def test_view_grouping_sort_classifications_and_navigator(self):
         self.page.evaluate("async()=>{await pwAdopt({...S,name:'Zeta',city:'Taunton'},{quiet:true});S.name='Alpha';S.city='Peabody';DIRTY();await pwSaveCur();setMode('portfolio');drawPane()}")
@@ -123,10 +129,11 @@ class RibbonBrowserTests(unittest.TestCase):
         other = self.page.evaluate("async()=>{const id=await pwCreatePortfolio('Other Portfolio');pwSetPf(id);return id}")
         self.page.locator('.rtabs').get_by_role('tab', name='Reports', exact=True).click()
         expect(self.ribbon().get_by_role('button', name='Open in Reports', exact=True)).to_be_disabled()
-        expect(self.ribbon().get_by_role('button', name='ARGUS Dump Package', exact=True)).to_be_disabled()
+        expect(self.ribbon().get_by_role('button', name='Report Workbook', exact=True)).to_be_disabled()
         self.page.locator('.rtabs').get_by_role('tab', name='Home', exact=True).click()
         self.ribbon().get_by_role('button', name='Export', exact=True).click()
         expect(self.page.get_by_role('menuitem', name='Property file of the open property…', exact=True)).to_be_disabled()
+        expect(self.page.get_by_role('menuitem', name='Input workbook template of the open property…', exact=True)).to_be_disabled()
         self.page.keyboard.press('Escape')
         target = self.page.evaluate("async()=>{const id=await pwAdopt({...S,name:'Unavailable Report'},{quiet:true});PW.sel.add(id);PWV.tab='reports';drawPane();window.originalOpen=pwOpen;pwOpen=async()=>{};return id}")
         self.ribbon().get_by_role('button', name='Open in Reports', exact=True).click()
@@ -144,7 +151,7 @@ class RibbonBrowserTests(unittest.TestCase):
         self.page.locator('.kdlg').get_by_role('button', name='OK', exact=True).click()
         self.page.evaluate('()=>{pwCommit=window.savedCommit;}')
         self.page.locator('.rtabs').get_by_role('tab', name='Reports', exact=True).click()
-        self.ribbon().get_by_role('button', name='ARGUS Dump Package', exact=True).click()
+        self.ribbon().get_by_role('button', name='Report Workbook', exact=True).click()
         expect(self.page.get_by_role('button', name='Export report tables (.json)', exact=True)).to_be_visible()
         self.assertEqual(self.page.evaluate('[MODE,T1,T2]'), ['inputs', 'tools', 'dump'])
 

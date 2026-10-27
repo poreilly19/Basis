@@ -144,7 +144,7 @@ function resolveMLA(m,S){
     growth:  gN,
     growthRef: (mrN&&mrN.inflRef)||(m.mrInflRef)||"mkt",
     tiInflRef: (ti&&ti.inflRef)||(m.tiInflRef)||"lcst",
-    // ARGUS lets new and renewal TI (and $/SF commissions) each take their own inflation; blank follows the series
+    // New and renewal TI (and $/SF commissions) can each use a separate inflation override; blank follows the series
     tiNewInflRef:(ti&&ti.newInflRef)||"", tiRenewInflRef:(ti&&ti.renewInflRef)||"",
     lcNewInflRef:(lc&&lc.newInflRef)||"", lcRenewInflRef:(lc&&lc.renewInflRef)||"",
     frNew:   fr?num(fr.newMo):num(m.frNewLocal),
@@ -188,7 +188,7 @@ function addMo(sr,n){let y=Math.floor(sr/10000),m=Math.floor(sr/100)%100,d=sr%10
   return ser(y,m,Math.min(d,dim(y,m)));}
 function serOfIdx(i,S,day){const p=pD(idxToM(i,S));return ser(p.y,p.m,day);}
 
-/* ---------- Base Rent schedule, matching the ARGUS Base Rent window ----------
+/* ---------- Base Rent schedule ----------
    Columns: Date | Years | Months | Days | Type | Units | Amount | Review Type |
             Minimum Uplift | Amount | Maximum Uplift | Amount
    Rows are contiguous: each row's Years/Months/Days is the term it holds for, so the
@@ -263,7 +263,7 @@ function resolveSched(rows,leaseStart,sf,baseAmt,baseBasis,step,leaseEnd,inflAbs
       if(ce!==null) cand=Math.min(cand,prior+ce);
       if(r.reviewType==="up") cand=Math.max(cand,prior);   // upward-only ratchet
       base=cand; stepc=0; lastRev=r.ser;
-    } else if(r.type==="inc"){                    // an increment on the rent as it stands (ARGUS "Step" rows in $; profile $ steps)
+    } else if(r.type==="inc"){                    // an increment on the current rent (fixed-dollar rent steps and profile steps)
       const v=absVal(r.units,r.amt,r.ser); if(v!==null) base+=v;
     } else {                                      // Base
       if(r.units==="pct") base=prior*(1+r.amt)-stepc;
@@ -320,11 +320,11 @@ const serISO=sr=>{const y=Math.floor(sr/10000),m=Math.floor(sr/100)%100,d=sr%100
 const serToIdx=(sr,S)=>(Math.floor(sr/10000)-S.startYear)*12+(Math.floor(sr/100)%100-S.startMonth);
 // where the clock stands after a lease ends on serial sr (in month e): a month-end expiry
 // hands over on the 1st, a lease ending 16 January hands over 16/31 of the way through it.
-// Tie-out: Envision Design, Ballardvale, ends 1/16/2032; ARGUS re-lets it 3/1/2032.
+// Reference-model tie-out: Envision Design, Ballardvale, ends 1/16/2032 and re-lets 3/1/2032.
 function curAfter(sr,e){ if(!sr) return e+1; const y=Math.floor(sr/10000), m=Math.floor(sr/100)%100, d=sr%100, D=dim(y,m);
   return (d>0&&d<D)?e+d/D:e+1; }
 const labelSer=sr=>MON[Math.floor(sr/100)%100-1]+" "+String(Math.floor(sr/10000)).slice(2);
-/* ARGUS takes a lease term either as an expiry date or as a length; the length form
+/* A lease term can be entered as an expiry date or a length; the length form
    ends the day before the anniversary, so a 5-year lease from 1 Jan ends 31 Dec. */
 function leaseEnd(t){
   if(t&&t.termMode==="term"){
@@ -348,14 +348,14 @@ function freeWins(t,startS,fMo){
 }
 
 /* ---------- named inflation series ----------
-   ARGUS holds inflation as named series with a rate per analysis year, not one scalar.
+   Named inflation series carry a rate per analysis year rather than one scalar.
    The first column (analysis year 1) is never applied when inflation in year one is off,
    so the cumulative factor for year y is the product of the rates for years 2..y.
    A series can legitimately carry a 0% in an early column — Campanelli's Market
    Inflation Rate is 0% in year 2 and 3% after, which is why its rollover rents sit one
    step below the expense series. Rates beyond the entered columns carry the last value. */
-/* the recovery year of a calendar month: the calendar year, or under ARGUS's Fiscal Recovery the analysis year (ARGUS's
-   fiscal years run from the analysis start), labelled by the calendar year it begins in. Base years, stops, the year a
+/* the recovery year of a calendar month: the calendar year, or the fiscal analysis year
+   (fiscal years run from the analysis start), labelled by the calendar year it begins in. Base years, stops, the year a
    stop nets over and caps on increases all use it; with a January analysis start the two agree. */
 function recYearYM(S,y,m){ if(S.recYear!=="fiscal") return y; const s0=num(S.startYear)*12+(num(S.startMonth)||1)-1; return num(S.startYear)+Math.floor((y*12+(m||1)-1-s0)/12); }
 function recYearI(S,i){ const ym=num(S.startYear)*12+(num(S.startMonth)||1)-1+i; return recYearYM(S,Math.floor(ym/12),ym%12+1); }
@@ -364,7 +364,7 @@ function recoveryBaseYear(S,value,start){
   if(/^\d{4}$/.test(year)&&+year>=1000&&+year<=9999)return +year;
   const date=pD(value)||pD(start);return date?recYearYM(S,date.y,date.m):recYearI(S,0);
 }
-// ARGUS's Recovery Timing also sets when inflation steps: on each anniversary of the analysis start (Fiscal Inflation)
+// Inflation steps on each anniversary of the analysis start (Fiscal Inflation)
 // or each January (Calendar Inflation, only with calendar recovery). With a January start the two agree.
 function infY(S,i){ i=Math.max(i,0); return S&&S.inflCal?Math.floor(((num(S.startMonth)||1)-1+i)/12):Math.floor(i/12); }
 function seriesFactor(S,id,i){
@@ -396,8 +396,7 @@ function mkSeries(name,rate,years,firstZero){
   return {id:uid(),name,rates:r};
 }
 
-/* Recovery structures. ARGUS ships twelve built-ins; these are the ones that change a
-   number. Base Year Stop takes an offset (-n / +n) so the stop can be struck on a year
+/* Recovery structures that affect the calculation. Base Year Stop takes an offset (-n / +n) so the stop can be struck on a year
    other than the lease's own base year. Stop Amount fixes the stop in dollars rather
    than deriving it from a year. Fixed pays a flat amount regardless of the pool.
    Market defers to whatever the space's market leasing profile says. */
@@ -534,7 +533,7 @@ function calc(S){
       // so the rent and free rent are exactly those charged; spread evenly over occupied months
       { const sy=Math.floor(startS/10000), sm=Math.floor(startS/100)%100, nT=(Math.floor(endS/10000)-sy)*12+(Math.floor(endS/100)%100-sm)+1;
         if(nT>0&&nT<=1200){ const W2=walkLease(Object.assign({},S,{startYear:sy,startMonth:sm}),nT,startS,endS,tsf,res,fMo,null,freeWins(t,startS,fMo));
-          // ARGUS's policy variant: from the acquisition date, and only to the earliest break;
+          // Acquisition-date policy variant: from acquisition, and only to the earliest break;
           // months outside that window are recognised at cash, so they carry no adjustment
           let k0=0, k1=nT-1;
           if(S.slAcqBreak){ const aq=sSer(S.purchaseDate||"")||sSer(mKey(num(S.startYear),num(S.startMonth)||1));
@@ -571,7 +570,7 @@ function calc(S){
                : lcB==="market"?((M.lcBasis==="psf")?M.lcNew*tsf*infAt(kLC):M.lcNew*termRent) : 0;
       if(kTI!==null) payInto(S,sp.ti,kTI,tiV,t.tiTiming);
       if(kLC!==null) payInto(S,sp.lc,kLC,lcV,t.lcTiming);
-      // tenant incentives (ARGUS TenantIncentives): cash beyond TI, paid on a date, optionally timed
+      // tenant incentives: cash beyond TI, paid on a date, optionally timed
       if(t.incBasis&&t.incBasis!=="none"&&num(t.incAmt)>0){ const iS=sSer(t.incDate||t.start), kI=iS!==null?serToIdx(iS,S):null;
         const r1=sp.schedule&&sp.schedule[0]?sp.schedule[0].monthly:0;
         const amt=t.incBasis==="amt"?num(t.incAmt):t.incBasis==="psf"?num(t.incAmt)*tsf:t.incBasis==="months"?num(t.incAmt)*r1:0;
@@ -585,7 +584,7 @@ function calc(S){
     } else cursor=0;
 
     let xp=t.expiry||"Market";
-    if(xp==="ContractRenewal"&&(S.tenants||[]).some(x=>x&&x.crOf===t.id)) xp="Vacate";   // its renewal is its own row on the rent roll (ARGUS)
+    if(xp==="ContractRenewal"&&(S.tenants||[]).some(x=>x&&x.crOf===t.id)) xp="Vacate";   // its renewal is its own row on the rent roll
     let segEnd=hasLease?endS:null;
     // a segment shares its first month with the lease before it, so occupancy adds and
     // the potential rate is the occupancy-weighted blend of the two
@@ -650,15 +649,15 @@ function calc(S){
     }
     /* Percentage rent on the contract term: the tenant pays a share of sales above a
        breakpoint. Natural breakpoint is annual base rent over the rate. Computed on an
-       annualised monthly basis; ARGUS settles it by lease year. */
+       annualised monthly basis; the reference models settle it by lease year. */
     const lastKpr=segEnd!==null?Math.min(serToIdx(segEnd,S),nM-1):-1; sp.prLastK=lastKpr;
     prFill(S,t,sp.pr,sp.rent,sp.occ,()=>tsf,lastKpr,nM);
-    if(xp==="Vacate"||xp==="Reabsorb") return sp;   // ARGUS hands Reabsorb space to Space Absorption; with none planned it stays vacant (Ballardvale's Applied lease ties out on this)
+    if(xp==="Vacate"||xp==="Reabsorb") return sp;   // Reabsorb space passes to Space Absorption; without a plan it stays vacant (confirmed by the Applied lease reference case)
     if(segEnd!==null&&segEnd!==endS) cursor=curAfter(segEnd,serToIdx(segEnd,S));
 
     /* rollover chain. A space vacant at t0 has no incumbent, so its FIRST lease is
        new-only (pp=0): full downtime, new rent/TI/LC/free rent. Later links blend. */
-    /* ARGUS weighted-average market leasing: on expiry the space takes ONE blended
+    /* Weighted-average market leasing: on expiry the space takes ONE blended
        lease carrying probability-weighted terms. Downtime is weighted with everything
        else -- 75% renewal against 12 months vacant is 3 months of real downtime, shown
        as three FULLY vacant months -- and the blended lease COMMENCES after it. That
@@ -692,8 +691,8 @@ function calc(S){
       const renewRate=(M.mktRenew===null)?priorPSF*M.pctPrior:M.mktRenew*uF;
       // "Inflate Market Rates: Monthly" compounds each year's own rate month by month from
       // the analysis start, so a lease commencing in March carries two months of that year's
-      // growth. Tie-out: Ballardvale's nine ARGUS market leases, every rate to the cent.
-      // Only the market rent inflates this way; TI and LC stay on annual steps, as in ARGUS.
+      // growth. Reference-model tie-out: Ballardvale's nine market leases, every rate to the cent.
+      // Only market rent inflates this way; TI and LC stay on annual steps.
       const c0=Math.floor(cStart);
       const mGrow=S.mktInflMonthly
         ? (M.growthRef ? (()=>{ const Y=Math.floor(c0/12), a=SF_(M.growthRef,12*Y), b=SF_(M.growthRef,12*(Y+1));
@@ -712,7 +711,7 @@ function calc(S){
       const gK=k=>M.growthRef?SF_(M.growthRef,k):Math.pow(1+M.growth,infY(S,k)), gC=gK(Math.floor(cStart));
       const mBY=recYearI(S,Math.min(Math.max(cInt,0),nM-1));
       // with market rates inflating monthly, each vacant month stands at its own month's rate, interpolated
-      // within the year as the commencement rate is (ARGUS: Ballardvale's downtime months, to the dollar)
+      // within the year as the commencement rate is (reference-model tie-out: Ballardvale downtime months)
       const mG=k=>{ if(M.growthRef){ const Y=Math.floor(k/12), a=SF_(M.growthRef,12*Y), b=SF_(M.growthRef,12*(Y+1)); return a>0?a*Math.pow(b/a,(k-12*Y)/12):a; } return Math.pow(1+M.growth,k/12); };
       const mG0=S.mktInflMonthly?mG(c0):0;
       for(let i=gap0;i<Math.min(cInt,nM);i++){
@@ -766,7 +765,7 @@ function calc(S){
         recName:(byId(S.recs,M.rec)||{}).name||"",ti:tiPSF*inf*tsf,
         lc:(M.lcBasis==="psf")?lcVal*inf*tsf:lcVal*gross});
       cur=cStart+termM; first=false;
-      if(rawMla.uponExp==="vacate"||rawMla.uponExp==="reabsorb") break;   // the chain ends; the space stays vacant, as ARGUS does without an absorption plan
+      if(rawMla.uponExp==="vacate"||rawMla.uponExp==="reabsorb") break;   // the chain ends; the space stays vacant without an absorption plan
       if(rawMla.uponExp==="renew") forceRenew=true;                        // later market leases renew with certainty
     }
     { const mp=byId(S.mlas,t.mla);
@@ -798,9 +797,9 @@ function calc(S){
     } else if((t.areaSched||[]).some(a=>a&&a.date)){ for(const B of bandsOf(t)) spaces.push(B.sp);
     } else { const sp=buildSpace(t); if(sp) spaces.push(sp); }
   }
-  // security deposits (ARGUS Tenants/Security Deposits): received at commencement, refunded at
+  // security deposits: received at commencement, refunded at
   // expiry, credited to the buyer at sale if still held; interest on the balance held is
-  // operating revenue, as ARGUS's policy has it
+  // operating revenue
   const sdNet=new Float64Array(nM), sdIntM=new Float64Array(nM);
   { const hold=nY*12, ir=num(S.sdIntRate)/12;
     for(const t of (S.tenants||[])){ if(!t.sdOn) continue;
@@ -815,7 +814,7 @@ function calc(S){
       for(const d of (sp.mktDep||[])){ const Dw=d.D*w; if(d.s<hold) sdNet[d.s]+=Dw; const out=Math.min(d.e,hold-1);
         if(out>=d.s){ sdNet[out]-=Dw; for(let i=d.s;i<=out;i++) sdIntM[i]+=Dw*ir; } } } }
   // absorption space is vacant until its lease begins: potential rent at market, with equal
-  // absorption vacancy, as ARGUS presents unleased absorption space
+  // absorption vacancy for unleased absorption space
   // the market rate in the profile's own unit, carried as $/SF/year
   const mktPSF=(mm,MM,sf)=>MM.mktNew*(mm.rentUnit==="psfmo"?12:mm.rentUnit==="yramt"?(sf>0?1/sf:0):mm.rentUnit==="moamt"?(sf>0?12/sf:0):1);
   const preLease=(sp,from,mm,MM)=>{ const g=i=>MM.growthRef?SF_(MM.growthRef,i):Math.pow(1+num(MM.growth),Math.floor(i/12));
@@ -823,7 +822,7 @@ function calc(S){
       if(sp.rent[i]===0){ sp.rent[i]=mktPSF(mm,MM,sp.sf)*g(i)*sp.sf/12; sp.recId[i]=MM.rec; } } };
   for(const sp of spaces){ const a=ABSM.get(sp.tid); if(!a) continue;
     const mm=byId(S.mlas,a.mla), MM=mm?resolveMLA(mm,S):null; if(!MM) continue; preLease(sp,a.absorbFrom,mm,MM); }
-  // a rent roll lease with an available date (ARGUS's Available) is vacant space until it starts
+  // a rent roll lease with an available date is vacant space until it starts
   for(const t of (S.tenants||[])){ if(!t.availDate||ABSM.has(t.id)) continue; const av=sSer(t.availDate); if(av===null) continue;
     const mm=byId(S.mlas,t.mla), MM=mm?resolveMLA(mm,S):null; if(!MM) continue;
     for(const sp of spaces) if(sp.tid===t.id&&!sp.bandLate) preLease(sp,serToIdx(av,S),mm,MM); }   // an expansion band is not this lease's space before it starts
@@ -833,7 +832,7 @@ function calc(S){
   for(const sp of spaces){ const w=(sp.w===undefined)?1:sp.w;
     for(let i=0;i<nM;i++){
       if(sp.noOcc===undefined){ const tt=sp.tid?(S.tenants||[]).find(x=>x.id===sp.tid):null; sp.noOcc=!!(tt&&tt.noOcc); }
-      if(!sp.noOcc) occSF[i]+=sp.sf*sp.occ[i]*w;     // a lease that does not affect occupancy (ARGUS: amenity and permanently vacant suites) stays out of occupied area
+      if(!sp.noOcc) occSF[i]+=sp.sf*sp.occ[i]*w;     // a lease excluded from occupancy (such as amenity and permanently vacant suites) stays out of occupied area
       gpr[i]+=sp.rent[i]*w; cpiRev[i]+=sp.cpiAdj[i]*sp.occ[i]*w;
       // absorption & turnover is the loss on potential BASE rent. CPI is already carried
       // net of occupancy on its own line; charging it here as well removed it twice in
@@ -867,7 +866,7 @@ function calc(S){
     return {name:o.name,m};
   });
   const parkL=revLine(S.parking,"count"), storL=revLine(S.storage,"count"), miscL=revLine(S.misc,"amt");
-  // miscellaneous rents on leases (ARGUS MiscellaneousRents): paid while the lease is occupied
+  // miscellaneous rents on leases: paid while the lease is occupied
   for(const t of (S.tenants||[])) for(const r of (t.miscRents||[])){
     const sp=spaces.find(x=>x.tid===t.id), s0=sSer(r.start||t.start), e0=eSer(r.end||leaseEnd(t)); if(!sp||s0===null||e0===null) continue;
     const a=Math.max(serToIdx(s0,S),0), b=Math.min(serToIdx(e0,S),nM-1), m=new Float64Array(nM);
@@ -941,7 +940,7 @@ function calc(S){
         const d=L.def, rp=recovOf(d);
         if(rp<=0||!inPool(d,poolId)||isPctBasis(d.basis)) continue;    // recoverable share of this line; % lines are added below
         const b=expBase(d,i), fx=clamp(num(d.fixedPct),0,1);
-        // "Use Monthly Occupancy for Gross Up" (Basis default on; ARGUS's off uses the year's average).
+        // "Use Monthly Occupancy for Gross Up" (Basis default on; turning it off uses the year's average).
         // A gross-up lifts the variable expense to the stated occupancy; it never reduces an actual one.
         const oc=(S.guMonthly===false)?occAY(Math.floor(i/12)):occRate[i];
         const guF=oc>0?Math.max(1,Math.min(gu/oc,1/oc)):1;
@@ -961,7 +960,7 @@ function calc(S){
   const dedAt=(L,i)=>(L&&L.poolDeduct&&num(L.poolDeduct))?num(L.poolDeduct)*seriesFactor(S,L.poolDeductInfl||"exp",i)/12:0;
   const RYc=new Array(nM); for(let i=0;i<nM;i++) RYc[i]=recYearI(S,i);   // each month's recovery year, worked out once per run
   function stopPSF(poolId,year,gu,L){
-    { const y0=RYc[0]; if(year<y0) year=y0; }   // a base year before the analysis is its first year (ARGUS: Brickstone's Seventy2, 2025 lease, 2026 stop)
+    { const y0=RYc[0]; if(year<y0) year=y0; }   // a base year before the analysis is its first year (reference case: Brickstone's Seventy2, 2025 lease, 2026 stop)
     const key=poolId+"|"+year+"|"+gu+"|"+(L&&L.poolDeduct&&num(L.poolDeduct)?num(L.poolDeduct)+":"+(L.poolDeductInfl||""):"");
     if(stopCache[key]!==undefined) return stopCache[key];
     let tot=0,n=0;
@@ -999,7 +998,7 @@ function calc(S){
   };
   // is the space on its own override this month? Standard-rate tenants are one pool, reduced by their own absorption
   // & turnover vacancy; an overridden tenant stands alone, reduced only by its own (Ballardvale 2025: LeafFilter at
-  // 0% before it starts offsets nothing, so general vacancy stays 3% of the other tenants, as ARGUS has it)
+  // 0% before it starts offsets nothing, so general vacancy stays 3% of the other tenants)
   const gvIsOv=(t,sp,i)=>{ if(!(t&&t.gvOv!==undefined&&t.gvOv!==null&&t.gvOv!=="")) return false;
     return !(S.gvOvLapses && sp && sp.inPlaceEnd!==undefined && i>sp.inPlaceEnd); };
   // by id: tenants often share a name (several "Vacant" suites, one company on two leases)
@@ -1012,7 +1011,7 @@ function calc(S){
   const GVB=(()=>{ const c=Math.round(num(S.gvCalcMonth)), out=[];
     if(!(c>=1&&c<=12)){ for(let y=0;y*12<nM;y++) out.push([y*12,Math.min(y*12+11,nM-1)]); return out; }
     const m0=(num(S.startMonth)||1)-1; let b0=0; for(let i=1;i<nM;i++) if((m0+i)%12===c-1){ out.push([b0,i-1]); b0=i; } out.push([b0,nM-1]); return out; })();
-  /* The base differs by calculation frequency, as ARGUS computes it with "Gross-up revenue by absorption &
+  /* The base differs by calculation frequency with "Gross-up revenue by absorption &
      turnover" and "Reduce general vacancy by absorption & turnover" both on: month by month, each tenant's potential
      revenue (vacant months included) less that month's absorption & turnover vacancy (JFK, to the dollar); annually,
      the year's scheduled revenue less the year's absorption & turnover vacancy (Ballardvale, to the dollar). */
@@ -1058,11 +1057,11 @@ function calc(S){
         if(R.method==="GROSS"&&!(R.lines&&R.lines.length)) continue;
         if(R.payDuringFree===false && sp.abate[i]>0) continue;   // stop during abatement
         // A structure is a list of lines, each with its own pool, method, share, gross-up,
-        // base year, admin fee, bounds and cap, as in ARGUS: net on CAM, base year on taxes,
+        // base year, admin fee, bounds and cap: net on CAM, base year on taxes,
         // fixed on insurance. A structure with no lines is its own single line, and on the
         // rentable and occupied shares every line computes exactly as before.
         const LINES=(R.lines&&R.lines.length)?R.lines:[R];
-        // a stock structure takes the lease's own amount (ARGUS's Stop Amount, Stop Amount / Area, Fixed Amount, Fixed Amount / Area):
+        // a stock structure takes the lease's own amount (Stop Amount, Stop Amount / Area, Fixed Amount, Fixed Amount / Area):
         // the rent roll's during the lease, the market profile's once the space has rolled to market
         let LAMT=null, LINF="";
         if(R.leaseAmt){ const t0=tenantOf(sp), mm=t0?byId(S.mlas,t0.mla):null, le=t0?leaseEnd(t0):"", ei=le?mIdx(le,S):null;
@@ -1076,7 +1075,7 @@ function calc(S){
             :sp.sf/((dn==="occupied")?Math.max(occSF[i],1)
               :(dn==="occfloor")?Math.max(occSF[i],lcN(L).sharePct*sf,1)
               :(dn==="custom")?Math.max(lcN(L).denomSF,1):sf);
-          const gu=lcN(L).gu;   // 0% is none (ARGUS's Bright Horizons, Tax NNN); blank keeps the 100% default
+          const gu=lcN(L).gu;   // 0% is none (reference case: Bright Horizons, Tax NNN); blank keeps the 100% default
           const pool=Math.max(0,poolFor(L.pool,i,gu)-dedAt(L,i));
           const adminOnPool=(L.adminBasis!=="recovery");
           const stopF=(L.stopInfl&&L.stopInfl!=="none")?seriesFactor(S,L.stopInfl,i):1;
@@ -1092,13 +1091,13 @@ function calc(S){
                                             :Math.max(0,share*pool-lcN(L).stopAmt*stopF*sp.sf/12);
           else if(m==="FIXED")    amt=lcN(L).fixed*sp.sf*lineFactor(S,L,i,"exp")/12;
           else if(m==="FIXEDAMT") amt=lcN(L).fixed*share*lineFactor(S,L,i,"exp")/12;
-          // ARGUS nets a stop over the recovery year, not month by month: the pool for the period's occupied months less the
+          // Net a stop over the recovery year rather than month by month: the pool for the period's occupied months less the
           // stop for those months, floored at nothing, then billed evenly (Brickstone: ALKU a flat $7,653 a month)
           if(S.stopAnnual!==false&&(m==="STOP"||m==="STOPAMT"||m==="STOPPSF")){
             const yI=calY(i), bY=sp.baseY[i]||0, key=si+":"+li+":"+yI+":"+sp.recId[i]+":"+bY+":"+(LAMT===null?"":LAMT);
             let sg=stopSeg.get(key);
             if(!sg){ let tot=0,ws=0;
-              // ARGUS prorates the recovery year's pool by the occupied months (ALKU's January-June 2033: half the year's pool)
+              // Prorate the recovery year's pool by the occupied months (ALKU's January-June 2033: half the year's pool)
               let pY=0,nY=0; for(let j=Math.max(0,i-11);j<=Math.min(nM-1,i+11);j++) if(calY(j)===yI){ pY+=Math.max(0,poolFor(L.pool,j,gu)-dedAt(L,j)); nY++; } const pAvg=nY?pY/nY:0;
               for(let j=Math.max(0,i-11);j<=Math.min(nM-1,i+11);j++){
                 if(calY(j)!==yI||sp.recId[j]!==sp.recId[i]||(sp.baseY[j]||0)!==bY) continue;
@@ -1176,11 +1175,11 @@ function calc(S){
   [[miscL,miscT,S.misc],[parkL,parkT,S.parking],[storL,storT,S.storage]].forEach(([LL,T,src])=>LL.forEach((x,k)=>{
     const nv=paySpreadLine(S,x.m,(x.def||(src||[])[k]||{})); if(!nv) return;
     if(!(x.def||(src||[])[k]||{}).refOnly) for(let i=0;i<nM;i++){ const d=nv[i]-x.m[i]; T[i]+=d; tpgr[i]+=d; egr[i]+=d; } x.m.set(nv); }));
-  // actuals (ARGUS Property/Actuals): through the actual values end month a line's actual amounts
+  // actuals: through the actual values end month a line's actual amounts
   // replace its forecast; with revenue actuals, those months carry no general vacancy or credit loss
   const mK=s=>{ const x=/^(\d{4})-(\d{2})/.exec(String(s||"")); return x?(+x[1]-num(S.startYear))*12+(+x[2]-(num(S.startMonth)||1)):-1; };
-  // budgets (ARGUS Property/Budget) follow the actuals: after the actual values end, through the budget values end, a line's
-  // budget replaces its forecast. Which of them the cash flow uses is ARGUS's data configuration (default Actual + Budget + Forecast).
+  // budgets follow the actuals: after the actual values end, through the budget values end, a line's
+  // budget replaces its forecast. The data configuration selects the cash flow source (default Actual + Budget + Forecast).
   const DC=S.dataCfg||"abf", actK=(DC==="abf"||DC==="af")?mK(S.actEnd):-1, budK=(DC==="abf"||DC==="bf")?mK(S.budEnd):-1;
   const ACT=new Map(), BUD=new Map(), aBase=num(S.startYear)*12+(num(S.startMonth)||1)-1;
   if(actK>=0) for(const a of (S.actuals||[])) if(a&&a.line){ const mp=atlParse(a.data); if(mp.size) ACT.set(a.line,mp); }
@@ -1254,7 +1253,7 @@ function calc(S){
 
   /* ---- debt ---- */
   const basis=price||pv, closing=closingFor(S,basis);
-  // debt: any number of loans (ARGUS Debt Financing); the old single-loan fields are one loan
+  // debt: any number of loans; the old single-loan fields are one loan
   const D=buildDebt(S,nM,nY,basis,leasing);
   const intM=D.intM,prinM=D.prinM,balM=D.balM,dsM=D.dsM;
   let loan=D.initLoan,balEnd=0,dsTot=new Array(nY+1).fill(0),avgDSCR=null,debtYield=null,feeAmt=D.initFee,equity=null,mult=null;
@@ -1432,7 +1431,7 @@ function scrubMetrics(S,R){
 }
 
 /* ---------- model validation ----------
-   Checks derived from four real ARGUS models. The Belmont draft is the reason this
+   Checks derived from four real external underwriting models. The Belmont draft is the reason this
    exists: zero building area, zero inflation, no expenses, a market leasing profile
    re-letting at $0.00/SF, NOI going to zero mid-hold and a reversion of $0 — a model
    that produces a number the pipeline would happily carry into a BOV. Severity is
@@ -1749,13 +1748,13 @@ function calcPortfolio(S){
 }
 
 /* =========================== INVESTMENT: PURCHASE, DEBT, RESALE ===========================
-   ARGUS's Investment tab in three parts. Property Purchase: the price plus closing costs,
+   Investment assumptions in three parts. Property Purchase: the price plus closing costs,
    which enter the IRR basis. Debt Financing: any number of loans, each sized by LTV or
    amount, funding at acquisition or later, fixed or floating (an index curve plus spread,
    with a floor and cap), interest only then amortizing, with a term and a balloon at
    maturity, origination and exit fees, and future funding drawn against leasing and capital
    costs. A model with the old single-loan fields is one loan computed exactly as before. */
-/* Space absorption (ARGUS Tenants/Space Absorption): a vacant block leased up as a run of
+/* Space absorption: a vacant block leased up as a run of
    speculative leases, each on the market profile's new-lease terms, commencing at an interval.
    They are generated here and then run through exactly the machinery of a speculative lease
    typed into the rent roll, so the two ways of underwriting vacant space agree. */
@@ -1820,7 +1819,7 @@ function prFill(S,t,pr,rent,occ,areaAt,lastK,nM){
     pr[i]=acc;
   }
 }
-/* Percentage rent sales categories (ARGUS SalesCategories). A lease without categories is
+/* Percentage rent sales categories. A lease without categories is
    one category built from its own fields, so existing leases compute exactly as before. */
 function prCatsOf(t){
   if(!t||!t.prOn) return [];
@@ -1835,14 +1834,14 @@ function prOver(c,sales,bp,tsf,frac){
   const b2=Math.max((c.bt2==="psf"?c.bp2*tsf:c.bp2)*(frac===undefined?1:frac),bp);   // a partial lease year prorates both tiers
   return Math.max(0,Math.min(sales,b2)-bp)*c.rate+Math.max(0,sales-b2)*c.rate2;
 }
-/* Ranges (ARGUS Market/Ranges): bands with a rate, applied marginally (each band's rate on
+/* Ranges: bands with a rate, applied marginally (each band's rate on
    the slice of value inside it) or whole (the band the value falls in sets one rate). */
 function rangeAmt(S,id,v){ const r=byId(S.ranges,id); if(!r) return 0;
   const E=(r.entries||[]).map(e=>({f:num(e.from),t:(e.to===""||e.to===null||e.to===undefined||num(e.to)<=0)?Infinity:num(e.to),r:num(e.rate)})).sort((a,b)=>a.f-b.f);
   if(!E.length) return 0;
   if(r.mode==="whole"){ const e=E.find(e=>v>=e.f&&v<e.t)||E[E.length-1]; return e.r*v; }
   return E.reduce((a,e)=>a+e.r*Math.max(0,Math.min(v,e.t)-e.f),0); }
-/* Resale adjustments and deductions (ARGUS SalesAdjustments, SalesDeductions): adjustments move
+/* Resale adjustments and deductions: adjustments move
    the gross sale price to an adjusted price, cost of sale applies to that, deductions come off
    after. With none the reversion is exactly gross x (1 - cost of sale). */
 function resaleNet(S,gross){
@@ -1852,7 +1851,7 @@ function resaleNet(S,gross){
   for(const d of (S.saleDed||[])){ const v=d.basis==="pct"?num(d.pct)*adj:num(d.amt); D.push(v); net-=v; }
   return {adj,net,A,D};
 }
-/* Direct capitalization (ARGUS Valuation/Direct Capitalization): a year's NOI over a cap rate,
+/* Direct capitalization: a year's NOI over a cap rate,
    less (or plus) adjustments, optionally rounded. */
 function dcCalc(S,ann,nY){
   const y=Math.min(Math.max(1,Math.round(num(S.dcYear)||1)),nY+1)-1, noi=ann.noi[y]||0;
@@ -1865,7 +1864,7 @@ function dcCalc(S,ann,nY){
   let value=gross+adj.reduce((t,x)=>t+x.v,0); const rd=num(S.dcRound); if(rd>0) value=Math.round(value/rd)*rd;
   return {year:y+1,noi,rate,gross,adj,value};
 }
-/* Payment timing (ARGUS payment schedules). A profile splits a payment around its event month
+/* Payment timing. A profile splits a payment around its event month
    (month:% pairs, or an even spread over N months), or, for revenue and expense lines, weights
    calendar months so each analysis year's total is paid in those months. With none, payments
    fall exactly where they did. */
@@ -1967,7 +1966,7 @@ function irrFrom(S,pvM,pvA,netRev,nY,basis,closing){
   if(S.pvMode==="annual"){ const ua=[-(basis+closing)]; for(let y=0;y<nY;y++) ua.push(pvA[y]); ua[ua.length-1]+=netRev; return irrAnnualF(ua); }
   const uf=[-(basis+closing)]; for(let i=0;i<nY*12;i++) uf.push(pvM[i]); uf[uf.length-1]+=netRev; return annuF(S,irrMonthlyF(uf)); }
 function closingFor(S,price){ return (S.acqCosts||[]).reduce((a,c)=>a+closingLine(S,c,price),0); }
-/* Inflation indices (ARGUS Market/Inflation Indices): index levels by month, used wherever an
+/* Inflation indices: index levels by month, used wherever an
    inflation series is. The factor for analysis year y is the level twelve y months in over
    the level at the start; past the data the last year's growth carries on, monthly. */
 const IDX_CACHE=new WeakMap();

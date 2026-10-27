@@ -1,5 +1,5 @@
 /* BEGIN BASIS BETA UI */
-const BASIS_BETA_VERSION='0.7.27';
+const BASIS_BETA_VERSION='0.7.28';
 function basisBetaSupportInfo(){
   // Explicit allowlist: never serialize property data, source documents, keys,
   // browser storage, page URLs, provider settings or raw error messages.
@@ -27,7 +27,7 @@ function basisOpenBetaInfo(){
     ],
     'Limitations':[
       'The beta stores models locally. Invite-only access must be configured by the host. Access login does not synchronize or isolate models between people sharing one browser profile.',
-      'Excel reports contain calculated values and assumptions; they are not editable model backups or guaranteed ARGUS dump-layout equivalents. Use .basiscre for complete backups.',
+      'Excel reports contain calculated values and assumptions; they are not editable model backups or guaranteed third-party report-layout equivalents. Use .basiscre for complete backups.',
       'AI may miss or misinterpret lease terms. A successful connection test or reconciled total does not prove extraction accuracy.',
       'Desktop automated tests do not establish native Windows, Safari/iOS or native Excel compatibility. Follow the release acceptance checklist on your intended device and review representative models independently.',
       'Keep API keys, tenant personal data and confidential documents out of feedback attachments. Use synthetic or redacted examples.'

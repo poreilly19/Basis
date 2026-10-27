@@ -13,7 +13,7 @@ versions were loaded in isolated Chromium sessions with external HTTPS blocked.
 
 | Inventory | Original v7 | v7.13 | Change |
 | --- | ---: | ---: | --- |
-| Model navigation routes | 51 | 53 | Document Import and ARGUS/XL4ADW exposed |
+| Model navigation routes | 51 | 53 | Document Import and Workbook Import / Export exposed |
 | Report navigation routes | 44 | 44 | None removed |
 | Registered pane builders | 62 | 62 | None removed |
 | Registered report builders | 44 | 44 | None removed |
@@ -24,8 +24,8 @@ complete. This inventory is not an exhaustive semantic comparison of every
 feature combination. Concrete findings from the original are:
 
 - **Hidden document and spreadsheet tools:** the original already registered
-  Document Intake and ARGUS/XL4ADW panels but omitted them from ordinary model
-  navigation. Document Import was exposed in 0.7.10; ARGUS/XL4ADW is exposed in
+  Document Intake and Workbook Import / Export panels but omitted them from ordinary model
+  navigation. Document Import was exposed in 0.7.10; Workbook Import / Export is exposed in
   0.7.13 under Data Workspace. Existing adapter mapping limitations remain.
 - **Source Log download:** the original Download CSV did nothing in a standalone
   browser without the optional host service. The current button downloads a CSV

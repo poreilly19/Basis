@@ -1,4 +1,5 @@
 {
+  "distribution_note": "Product names, related route/key identifiers and captured panel text in this historical comparison have been neutralized for distribution. This is an edited feature inventory, not verbatim source evidence. Recorded hashes identify the original reviewed artifacts; feature counts, values and findings are retained.",
   "baseline": "original uploaded v7 handoff; reattached and hash verified",
   "baseline_zip_sha256": "5ccabb5cf57fb58506d095e06e586e18dc1acd1aaf3d3d388abbd04b271d09db",
   "current_app_sha256": "278301c082f557f8edd5b85e17ddeff9cf5cd232b245f704b4c7eff344d5fbfb",
@@ -441,7 +442,7 @@
         "tenants.sd",
         "tenants.sl",
         "tenants.tg",
-        "tools.argus",
+        "tools.workbook",
         "tools.dump",
         "tools.file",
         "tools.import",
@@ -694,8 +695,8 @@
           ]
         }
       },
-      "argus_panel_present": true,
-      "argus_in_navigation": false,
+      "workbook_panel_present": true,
+      "workbook_in_navigation": false,
       "summary_blocks": {
         "property": [
           "chart"
@@ -741,8 +742,8 @@
         "tangent": null,
         "ordinary": 0.09999999999999998
       },
-      "argus_panel_via_normal_router": "ARGUS IMPORT\nDrop an XL4ADW workbook or ARGUS dump package here\nBasis reads ARGUS's Input Assumptions Report and builds the whole model from it: no AI, no other input. If the file also has ARGUS's Cash Flow, Basis runs the model and checks it against ARGUS line by line, with the DCF value, before you open it.\nARGUS EXPORT\n\nFill an ARGUS XL4ADW input workbook with this model, then load it into ARGUS with Send Data to AE. Values are written in ARGUS's own formats, and the workbook keeps its dropdowns and AE Reference Sheet.\n\nDrop an XL4ADW input workbook, or click to choose\nFrom any property: in Excel, ARGUS AE \u2192 Create Input Sheets \u2192 Select All \u2192 Fill sheets with AE Data, then save. Basis uses it for the layout only; nothing from that property is copied into this one.",
-      "argus_panel_constructs": true,
+      "workbook_panel_via_normal_router": "WORKBOOK IMPORT\nDrop an XL4ADW workbook or report package here.\nBasis reads the source Input Assumptions Report and builds the model without AI. When the source includes a Cash Flow sheet, Basis compares the calculated model with that report and its DCF value before opening it.\nWORKBOOK EXPORT\n\nFill an XL4ADW input workbook with the supported fields from this model for use in its originating application. The template retains its dropdowns and reference sheet.\n\nDrop an XL4ADW input workbook, or click to choose.\nCreate a complete input template in the originating application and save it. Basis uses the template layout; property values are replaced with this model.",
+      "workbook_panel_constructs": true,
       "portfolio_controls": {
         "include_rollup": 1,
         "group_by": 1,
@@ -951,8 +952,8 @@
           "label": "Document Import"
         },
         {
-          "id": "tools.argus",
-          "label": "ARGUS / XL4ADW"
+          "id": "tools.workbook",
+          "label": "Workbook Import / Export"
         },
         {
           "id": "tools.dump",
@@ -1195,7 +1196,7 @@
         "tenants.sd",
         "tenants.sl",
         "tenants.tg",
-        "tools.argus",
+        "tools.workbook",
         "tools.dump",
         "tools.file",
         "tools.import",
@@ -1451,8 +1452,8 @@
           ]
         }
       },
-      "argus_panel_present": true,
-      "argus_in_navigation": true,
+      "workbook_panel_present": true,
+      "workbook_in_navigation": true,
       "summary_blocks": {
         "property": [
           "chart"
@@ -1498,8 +1499,8 @@
         "tangent": null,
         "ordinary": 0.10000000000000006
       },
-      "argus_panel_via_normal_router": "ARGUS IMPORT\nDrop an XL4ADW workbook or ARGUS dump package here\nBasis reads ARGUS's Input Assumptions Report and builds the whole model from it: no AI, no other input. If the file also has ARGUS's Cash Flow, Basis runs the model and checks it against ARGUS line by line, with the DCF value, before you open it.\nARGUS EXPORT\n\nFill an ARGUS XL4ADW input workbook with this model, then load it into ARGUS with Send Data to AE. Values are written in ARGUS's own formats, and the workbook keeps its dropdowns and AE Reference Sheet.\n\nDrop an XL4ADW input workbook, or click to choose\nFrom any property: in Excel, ARGUS AE \u2192 Create Input Sheets \u2192 Select All \u2192 Fill sheets with AE Data, then save. Basis uses it for the layout only; nothing from that property is copied into this one.",
-      "argus_panel_constructs": true,
+      "workbook_panel_via_normal_router": "WORKBOOK IMPORT\nDrop an XL4ADW workbook or report package here.\nBasis reads the source Input Assumptions Report and builds the model without AI. When the source includes a Cash Flow sheet, Basis compares the calculated model with that report and its DCF value before opening it.\nWORKBOOK EXPORT\n\nFill an XL4ADW input workbook with the supported fields from this model for use in its originating application. The template retains its dropdowns and reference sheet.\n\nDrop an XL4ADW input workbook, or click to choose.\nCreate a complete input template in the originating application and save it. Basis uses the template layout; property values are replaced with this model.",
+      "workbook_panel_constructs": true,
       "portfolio_controls": {
         "include_rollup": 1,
         "group_by": 1,
@@ -1518,7 +1519,7 @@
       "after": 53,
       "removed": [],
       "added": [
-        "tools.argus",
+        "tools.workbook",
         "tools.import"
       ]
     },
