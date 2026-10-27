@@ -1,10 +1,10 @@
 # Cloudflare Workers + Access beta deployment
 
 The selected host is the existing **`basis` Cloudflare Worker**, serving the
-static release at **https://basis.pjoreilly19.workers.dev/**. The deployment
-configuration is prepared; this guide does not establish that deployment or
-live acceptance checks have passed. Record those results separately before
-inviting testers. [Cloudflare Pages](CLOUDFLARE_BETA.md) remains an alternative.
+static release at **https://basis.pjoreilly19.workers.dev/**. The owner preview is
+deployed; see the [deployment record](DEPLOYMENT_2026_10_27.md) for completed
+checks and remaining acceptance before inviting testers.
+[Cloudflare Pages](CLOUDFLARE_BETA.md) remains an alternative.
 
 The Worker serves static assets only. It needs no JavaScript handler, Functions,
 database, application server or AI provider secrets. Models remain in each

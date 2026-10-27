@@ -32,7 +32,8 @@ when awaiting the page's `PW.ready` Promise
 immediately after reload. The smoke harness now polls for the active property
 and completed startup UI on both initial load and reload; exact persisted-model,
 calculation-worker and archive round-trip assertions remain in place. This
-harness-only correction still needs a hosted Windows rerun.
+harness-only correction passed the hosted Windows Chromium beta job on commit
+`67f3b1948f56895ad94216df0323306e63789bff` in run `40594198426`.
 
 ## Local commands
 
