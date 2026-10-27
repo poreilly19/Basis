@@ -16,16 +16,23 @@ The first hosted run rejected the workflow before jobs started because
 `runner.temp` was referenced in job-level environment settings. The CI-only
 correction resolves that path inside steps and passes the cache explicitly with
 `--cache`; runtime downloads remain outside the checkout in the runner temporary
-directory. Local YAML and CLI validation pass. Hosted runner images, Windows
-execution and Node 20 remain unverified until the corrected hosted checks finish.
-The preceding local checks used Node 24 and Python 3.12 on Linux.
+directory. Local YAML and CLI validation pass. Subsequent hosted Node 20/24
+checks passed on Ubuntu and Windows. The preceding local checks used Node 24
+and Python 3.12 on Linux.
 
 The corrected workflow then passed Node regression suites on Windows, but its
 launcher checks exposed Windows socket reuse accepting a second listener on an
 occupied port. The launcher now requests exclusive Windows socket ownership and
 keeps the existing identity check for a repeated launch. A portable competing-
-listener regression supplements the same-release and different-release tests;
-native Windows validation of this correction is still pending a hosted rerun.
+listener regression supplements the same-release and different-release tests.
+Both hosted Windows Node jobs passed these tests, including native CMD launch.
+
+Windows Chromium beta smoke then exposed a repeatable browser-protocol error
+when awaiting the page's `PW.ready` Promise
+immediately after reload. The smoke harness now polls for the active property
+and completed startup UI on both initial load and reload; exact persisted-model,
+calculation-worker and archive round-trip assertions remain in place. This
+harness-only correction still needs a hosted Windows rerun.
 
 ## Local commands
 

@@ -63,8 +63,14 @@ class BetaDeploymentSmokeTests(unittest.TestCase):
         self.page.on('pageerror', lambda error: self.errors.append(str(error)))
         self.tmp = tempfile.TemporaryDirectory()
         self.response = self.page.goto(self.url)
-        self.page.evaluate('PW.ready')
-        self.page.wait_for_function('PW.cur && document.querySelector("#startup").hidden')
+        self.wait_for_workspace()
+
+    def wait_for_workspace(self):
+        # Observe completed initialization instead of exporting its pending
+        # Promise through the browser protocol after navigation. Chromium can
+        # report that Promise as garbage collected during a Windows reload.
+        self.page.wait_for_function('''() => typeof PW !== 'undefined' &&
+            PW.cur && document.querySelector('#startup')?.hidden === true''')
 
     def tearDown(self):
         violations = self.page.evaluate('cspViolations')
@@ -100,7 +106,7 @@ class BetaDeploymentSmokeTests(unittest.TestCase):
         self.page.locator('#basisSaveChanges').click()
         self.page.evaluate('PW.q')
         expected = self.page.evaluate('JSON.stringify(S)')
-        self.page.reload();self.page.evaluate('PW.ready')
+        self.page.reload();self.wait_for_workspace()
         self.assertEqual(self.page.evaluate('JSON.stringify(S)'), expected)
         result = self.page.evaluate('''async()=>{
           const snapshot=JSON.parse(JSON.stringify(S));

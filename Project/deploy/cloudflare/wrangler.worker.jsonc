@@ -1,0 +1,14 @@
+// Static assets only. Attach a Worker-scoped Access application before deploying
+// this private beta: workers_dev enables the production address below.
+{
+  "name": "basis",
+  "compatibility_date": "2026-10-27",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  "assets": {
+    "directory": "../../dist/basis-beta",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

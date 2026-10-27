@@ -49,14 +49,19 @@ portable project package.
 
 ## Hosting
 
-The prepared deployment targets **Cloudflare Pages**. Build from `Project` using
-`npm run build:beta`; the output directory is `Project/dist/basis-beta` relative to
-this repository's root. Cloudflare Pages offers a free `pages.dev` address, so a
-purchased domain is unnecessary.
+The selected deployment uses **Cloudflare Workers static assets + Access** at
+**https://basis.pjoreilly19.workers.dev/**, with no purchased domain or application
+server. Follow the [Workers beta deployment guide](Project/docs/CLOUDFLARE_WORKERS_BETA.md)
+for the prepared build configuration, owner-only Google access and required live
+checks. Preview URLs remain disabled. Deployment configuration being prepared
+does not establish that the site is live or ready for invitations.
 
-For an invited beta, follow the [Cloudflare Pages + Access setup guide](Project/docs/CLOUDFLARE_BETA.md)
-and protect production and preview addresses before uploading the actual app.
-Uploading source to GitHub does not deploy a website or configure Access.
+Build from `Project` using `npm run build:beta && npm run verify:beta`; only
+`Project/dist/basis-beta` is published. Static asset requests are free; leave the
+separate Workers Cache feature disabled. The
+[Cloudflare Pages + Access guide](Project/docs/CLOUDFLARE_BETA.md) remains an
+alternative. Uploading source to GitHub does not itself deploy the site or
+configure Access.
 
 ## Status and license
 
