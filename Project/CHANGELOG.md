@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — GitHub Actions setup correction
+
+- Resolve runtime-cache paths in step contexts, where `runner.temp` is available, and pass `--cache` explicitly to runtime tests. Keep downloaded fixtures outside the checkout. This corrects the workflow setup rejection without changing application files or underwriting calculations.
+
 ## 0.7.27 — 2026-10-27 Cloudflare beta handoff and report reconciliation
 
 - Correct workbook cash-flow detail: exclude reference-only expenses/capital from outflow lines while retaining their assumptions, and include non-operating ground rent. Add independent signed-credit, leasing/capital and debt subtotal fixtures; financial engine unchanged.

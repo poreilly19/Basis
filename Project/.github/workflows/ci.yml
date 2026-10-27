@@ -53,8 +53,6 @@ jobs:
     name: Chromium and actual runtime integrations
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      BASIS_DEPENDENCY_DIR: ${{ runner.temp }}/basis-runtime-dependencies
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -72,16 +70,16 @@ jobs:
       - name: Restore separately cached public runtime fixtures
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ env.BASIS_DEPENDENCY_DIR }}
+          path: ${{ runner.temp }}/basis-runtime-dependencies
           key: basis-runtime-${{ runner.os }}-${{ hashFiles('tests/fixtures/runtime_dependencies.json') }}
       - name: Fetch or verify exact manifest-pinned runtime fixtures
-        run: python scripts/fetch-test-dependencies.py "$BASIS_DEPENDENCY_DIR"
+        run: python scripts/fetch-test-dependencies.py "${{ runner.temp }}/basis-runtime-dependencies"
       - name: Verify the standalone build
         run: npm run check
       - name: Offline Chromium regressions
         run: npm run test:browser
       - name: Verified actual-library runtime smoke tests
-        run: npm run test:dependencies
+        run: npm run test:dependencies -- --cache "${{ runner.temp }}/basis-runtime-dependencies"
 
   beta:
     name: Beta headers and integrations / ${{ matrix.browser }} / ${{ matrix.os }}
@@ -99,8 +97,6 @@ jobs:
             browser: webkit
           - os: windows-latest
             browser: chromium
-    env:
-      BASIS_DEPENDENCY_DIR: ${{ runner.temp }}/basis-runtime-dependencies
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -118,13 +114,13 @@ jobs:
       - name: Restore separately cached public runtime fixtures
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ${{ env.BASIS_DEPENDENCY_DIR }}
+          path: ${{ runner.temp }}/basis-runtime-dependencies
           key: basis-runtime-${{ runner.os }}-${{ hashFiles('tests/fixtures/runtime_dependencies.json') }}
       - name: Fetch or verify exact manifest-pinned runtime fixtures
-        run: python scripts/fetch-test-dependencies.py "${{ env.BASIS_DEPENDENCY_DIR }}"
+        run: python scripts/fetch-test-dependencies.py "${{ runner.temp }}/basis-runtime-dependencies"
       - name: Build minimal beta candidate with matching security headers
         run: npm run build:beta
       - name: Verify deployment inventory and matching security policy
         run: npm run verify:beta
       - name: Test the served deployment candidate
-        run: npm run test:beta -- --cache "${{ env.BASIS_DEPENDENCY_DIR }}" --browser ${{ matrix.browser }}
+        run: npm run test:beta -- --cache "${{ runner.temp }}/basis-runtime-dependencies" --browser ${{ matrix.browser }}

@@ -12,9 +12,13 @@ are read-only, jobs have deadlines, and newer runs cancel older runs on the same
 workflow/ref. Runtime library fixtures live in a separate cache keyed by the
 manifest hash. Restored bytes are verified before any test uses them.
 
-The workflow has been syntax-checked locally. It has not been pushed or run on
-GitHub. Hosted runner images, Windows execution and Node 20 remain unverified in
-this session; the local checks used Node 24 and Python 3.12 on Linux.
+The first hosted run rejected the workflow before jobs started because
+`runner.temp` was referenced in job-level environment settings. The CI-only
+correction resolves that path inside steps and passes the cache explicitly with
+`--cache`; runtime downloads remain outside the checkout in the runner temporary
+directory. Local YAML and CLI validation pass. Hosted runner images, Windows
+execution and Node 20 remain unverified until the corrected hosted checks finish.
+The preceding local checks used Node 24 and Python 3.12 on Linux.
 
 ## Local commands
 
@@ -61,7 +65,7 @@ native backup, calculation workers, real report XLSX generation, real PDF
 rendering/cleanup and a simulated AI connection. Install the selected Playwright
 browser, then run `npm run build:beta` and
 `npm run test:beta -- --cache ../basis-runtime-cache --browser firefox` (or
-`chromium` / `webkit`). These configured jobs still need a real GitHub run.
+`chromium` / `webkit`). These configured jobs still need a completed GitHub run.
 Local results and platform distinctions are recorded in
 [the 0.7.26 validation snapshot](VALIDATION_0_7_26.md).
 
