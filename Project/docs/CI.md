@@ -20,6 +20,13 @@ directory. Local YAML and CLI validation pass. Hosted runner images, Windows
 execution and Node 20 remain unverified until the corrected hosted checks finish.
 The preceding local checks used Node 24 and Python 3.12 on Linux.
 
+The corrected workflow then passed Node regression suites on Windows, but its
+launcher checks exposed Windows socket reuse accepting a second listener on an
+occupied port. The launcher now requests exclusive Windows socket ownership and
+keeps the existing identity check for a repeated launch. A portable competing-
+listener regression supplements the same-release and different-release tests;
+native Windows validation of this correction is still pending a hosted rerun.
+
 ## Local commands
 
 Install Node 20+ and Python 3.10+. The browser suites also need the development-only

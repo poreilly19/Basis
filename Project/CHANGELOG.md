@@ -3,6 +3,7 @@
 ## Unreleased — GitHub Actions setup correction
 
 - Resolve runtime-cache paths in step contexts, where `runner.temp` is available, and pass `--cache` explicitly to runtime tests. Keep downloaded fixtures outside the checkout. This corrects the workflow setup rejection without changing application files or underwriting calculations.
+- Bind the Windows local preview server exclusively. A second launch now checks the running app identity instead of binding the occupied port and hanging; a different release retains the occupied-port explanation. Add a competing-listener regression without changing application HTML or financial calculations.
 
 ## 0.7.27 — 2026-10-27 Cloudflare beta handoff and report reconciliation
 

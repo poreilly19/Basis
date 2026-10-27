@@ -5,6 +5,7 @@ import hashlib
 import http.server
 import json
 from pathlib import Path
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -47,6 +48,19 @@ class BasisHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+class BasisHTTPServer(http.server.ThreadingHTTPServer):
+    # Multiple listeners would make the stable browser-storage origin ambiguous.
+    allow_reuse_port = False
+
+    def server_bind(self):
+        if sys.platform == 'win32':
+            # Windows SO_REUSEADDR allows an occupied port to be rebound. Take
+            # exclusive ownership so a second launch reaches the identity check.
+            self.allow_reuse_address = False
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def existing_app(port, identity):
     # Never use a configured HTTP proxy for loopback probing.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -72,7 +86,7 @@ def launch(directory=APP, port=DEFAULT_PORT, browser=True):
     identity = app_identity(directory)
     handler = functools.partial(BasisHandler, directory=directory, identity=identity)
     try:
-        server = http.server.ThreadingHTTPServer((HOST, port), handler)
+        server = BasisHTTPServer((HOST, port), handler)
     except OSError as error:
         if existing_app(port, identity):
             url = f'http://{HOST}:{port}/'

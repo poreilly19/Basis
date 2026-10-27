@@ -68,6 +68,14 @@ class StartBasisTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('already running at '+url,result.stdout)
         self.assertIsNone(p.poll())
+    def test_running_server_rejects_another_listener_even_with_address_reuse(self):
+        _,url=self.start();port=int(url.rsplit(':',1)[1].strip('/'))
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as other:
+            other.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            with self.assertRaises(OSError):
+                other.bind((launcher.HOST,port))
+                other.listen()
+        with self.get(url) as response:self.assertEqual(response.read(),self.html)
     def test_other_app_or_version_on_port_is_not_claimed_as_basis(self):
         _,url=self.start();port=int(url.rsplit(':',1)[1].strip('/'))
         (self.app/'index.html').write_text('Changed release',encoding='utf-8')
