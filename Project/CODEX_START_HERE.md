@@ -1,7 +1,9 @@
 # First task to paste into Codex
 
-Review update: the continued review and targeted fixes are complete in 0.7.9.
-Start with `docs/CODE_REVIEW.md`, `CHANGELOG.md` and the updated release checklist.
+Review update: 0.7.25 restores the supplied reference's ribbon button order,
+groups and left portfolio/building Navigator on the corrected application.
+Start with `docs/RIBBON_0_7_25.md`, `docs/VALIDATION_0_7_25.md`, `CHANGELOG.md`
+and the updated release checklist.
 The original task below records the handoff priorities; it is not a statement that
 all of them are now complete.
 

@@ -67,6 +67,9 @@ function basisValidateModel(s){
     for(const [i,series] of (model.infl||[]).entries())if(series.rates!==undefined){if(!Array.isArray(series.rates))invalid(label+'.infl['+i+'].rates','must be an array');for(const value of series.rates)if(value!==null&&typeof value!=='number'&&typeof value!=='string')invalid(label+'.infl['+i+'].rates','must contain numbers or numeric text');}
     for(const [i,profile] of (model.mlas||[]).entries()){const at=label+'.mlas['+i+']';term(profile,at);months(profile.downtime,at+'.downtime');}
     for(const [i,tenant] of (model.tenants||[]).entries()){const at=label+'.tenants['+i+']';baseYear(tenant.baseYear,at+'.baseYear');term(tenant,at);term(tenant,at,'opt');months(tenant.hoMonths,at+'.hoMonths');
+      if(tenant.groups!==undefined){const groups=tenant.groups;
+        if(!Array.isArray(groups)||groups.length>1000||groups.some(id=>typeof id!=='string'||!id||id.length>1000))invalid(at+'.groups','must be an array of at most 1000 nonempty string references');
+        if(new Set(groups).size!==groups.length)invalid(at+'.groups','contains duplicate group IDs');}
       if(tenant.start&&tenant.end){const month=value=>+value.slice(0,4)*12+Number(value.split('-')[1]);if(month(tenant.end)-month(tenant.start)+1>monthLimit)invalid(at,'lease dates exceed the 1200-month computation limit');}}
     for(const [i,schedule] of (model.payTimes||[]).entries())if(schedule.mode==='spread')months(schedule.months,label+'.payTimes['+i+'].months');
     let generated=0;for(const [i,block] of (model.absorb||[]).entries()){const at=label+'.absorb['+i+']';if(block.on===false||!block.start)continue;

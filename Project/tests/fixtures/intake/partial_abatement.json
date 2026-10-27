@@ -1,0 +1,14 @@
+{
+  "description": "Synthetic lease and amendment; amounts are independent expected facts, not output from a live model.",
+  "documents": [
+    {
+      "id": "base-lease", "name": "lease.txt", "pages": [{"n": 1, "text": "North Labs LLC leases Suite 100, 1,000 square feet, beginning January 1, 2026. Annual base rent is $12,000. The original expiry is December 31, 2030."}],
+      "results": [{"docType": "lease", "tenants": [{"name": "North Labs LLC", "suite": "100", "sf": 1000, "start": "2026-01-01", "end": "2030-12-31", "rent": [{"from": "2026-01-01", "amount": 12000, "unit": "annual"}], "src": {"page": 1, "quote": "North Labs LLC leases Suite 100"}, "fieldSources": {"rent": {"page": 1, "quote": "Annual base rent is $12,000."}, "sf": {"page": 1, "quote": "1,000 square feet"}, "start": {"page": 1, "quote": "beginning January 1, 2026"}}, "confidence": 0.98}]}]
+    },
+    {
+      "id": "lease-amendment", "name": "lease.txt", "pages": [{"n": 1, "text": "North Labs LLC, Suite 100. The expiry is extended to December 31, 2032. Base rent is abated by 50% for six consecutive months beginning July 1, 2026. Recovery charges remain payable."}],
+      "results": [{"docType": "amendment", "tenants": [{"name": "North Labs LLC", "suite": "100", "end": "2032-12-31", "freeRent": {"months": 6, "start": "2026-07-01", "pct": 0.5, "scope": "base"}, "src": {"page": 1, "quote": "North Labs LLC, Suite 100."}, "fieldSources": {"end": {"page": 1, "quote": "The expiry is extended to December 31, 2032."}, "freeRent": {"page": 1, "quote": "Base rent is abated by 50% for six consecutive months beginning July 1, 2026."}}, "confidence": 0.9}]}]
+    }
+  ],
+  "expected": {"annualRent": 12000, "expiry": "2032-12-31", "freeMonths": 6, "freeStart": 7, "freePct": 0.5, "freeType": "base", "monthlyRentYearOne": [1000,1000,1000,1000,1000,1000,500,500,500,500,500,500], "yearOneRent": 9000, "yearTwoRent": 12000}
+}

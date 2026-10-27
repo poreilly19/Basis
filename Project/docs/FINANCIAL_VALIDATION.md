@@ -244,3 +244,61 @@ across equivalent XML syntax instead of falling back to default analysis dates.
 Reload confirmation now follows edit ownership and successful exact-snapshot
 publication rather than clock ordering. These are input/lifecycle corrections;
 no underwriting formula changes are intended.
+
+## 0.7.18 document inputs and analysis horizon
+
+All financial-engine source outside `validateModel` is byte-identical to the
+immutable v7.17 release. Validation adds structured input destinations, an
+explicit finding for holds beyond the supported 40 years, and indexed lookups.
+The full engine now has SHA-256
+`b55f2e83ad77409cffe3068a8fce7355aef2f10fe521150ac401146d679cc493`.
+The independent financial fixtures and exact engine-result fingerprints remain
+in the regression suite.
+
+Document mapping intentionally changes affected model inputs:
+
+- A $12,000 annual lease with no area retains annual-dollar units. Adding 1,000 SF
+  later still produces $12,000 annual rent; the old mapper treated the amount as
+  $12,000/SF/year by dividing by an assumed one SF.
+- Source SF, expense amounts/rates, annual schedules and converted rents retain
+  their numeric precision. For $12,345.67 over 1,000.25 SF, the saved per-SF rent is
+  the full JavaScript division result, not a four-decimal approximation. Display
+  formatting continues to round SF and currency independently.
+- Accepted, retained or corrected area is used consistently by both proposal
+  review and Apply. Invalid review drafts cannot reach the saved model.
+- A retained 60-year input is not rewritten or represented as a 60-year forecast.
+  The page explicitly shows 480 modeled months and Model Checks identifies the
+  40-year engine limit. New property setup accepts 1–40 years.
+
+These cases are covered by `tests/guided_model.test.cjs` and the corresponding
+browser workflows. See [the review](CODE_REVIEW_0_7_18.md) and
+[validation snapshot](VALIDATION_0_7_18.md) for exact evidence and limitations.
+
+## 0.7.19 independent edge-case reconciliation
+
+The engine intentionally changes low-occupancy expense gross-up and recognition
+of financing within the selected hold. A 50-SF tenant in a 1,000-SF building with
+$10,000 full-occupancy expenses (20% fixed) and 95% gross-up now reimburses $480,
+not $290. The fixed $2,000 cost is unchanged; variable expenses gross up from
+$400 actual to $7,600 for recovery, making a $9,600 pool multiplied by 5% share.
+
+A $1,000 July draw at 6% on a zero-initial-advance facility now produces levered
+returns. With $120,000 acquisition/sale, $9,600 annual NOI, a two-year hold and
+the matching $1,000 July capital cost, the equity receives six $800 payments,
+eighteen $795 payments and $119,000 net terminal proceeds. The independent
+monthly-IRR calculation gives approximately 7.57600845% nominal annualized;
+the net-distribution multiple is 1.1509166667. Advances/draws beyond a selected
+hold do not activate levered results for that hold.
+
+Twenty new financial/diagnostic cases also cover caps, stop netting, circular
+management fees, floating rates, maturity/exit fees, commitments, rollover costs,
+midmonth options, leap-day rent and the existing within-first-month valuation
+adjustment. Nine import cases cover explicit expiry and free-rent timing, including
+reviewed commencement dates. See [the accuracy review](ACCURACY_0_7_19.md) for
+the assumptions and remaining limitations.
+
+The 18 recorded full-result fingerprints still match exactly and were not
+regenerated. They do not include the new failing edge cases and therefore do not
+establish universal correctness. The new engine SHA-256 is
+`5b4878931d4e3221c47b2efb90c6063d791d2e93e6b014711a121bc43468d188`.
+Final command evidence is in [the validation snapshot](VALIDATION_0_7_19.md).

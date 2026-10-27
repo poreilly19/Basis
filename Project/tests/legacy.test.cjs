@@ -73,6 +73,38 @@ test('legacy workbook tables round-trip nested inputs, children and typed values
   assert.deepEqual(plain(model.tenants[0].custom), [{zero: 0, flag: false}]);
 });
 
+test('Basis workbook and JSON model files retain multiple and legacy tenant groups',()=>{
+  const {run}=setup();
+  const result=plain(run(`(()=>{
+    const model=blankState();model.pid='groups';model.tgroups=[{id:'a',name:'Industrial'},{id:'b',name:'Credit'}];
+    model.tenants=[{id:'one',group:'a',groups:['a','b','missing']},{id:'two',group:'b'},{id:'three',group:'',groups:[]}];
+    const pkg=pfPackage(model,{results:false}),book=Object.fromEntries(pkg.sheets.map(s=>[s.name,s.rows]));
+    const display=book.Tenants[0].indexOf('groups (name)'),text=book.Tenants[1][display];
+    book.Tenants[1][display]='This display label must not replace the IDs';
+    return {original:model.tenants,text,table:pfUnpack(book).props[0].st.tenants,json:pfUnpackJSON(pkg.json).props[0].st.tenants};
+  })()`));
+  assert.deepEqual(result.table.map(t=>({id:t.id,group:t.group||'',...(t.groups===undefined?{}:{groups:t.groups})})),result.original);
+  assert.deepEqual(result.json,result.original);
+  assert.equal(result.text,'Industrial; Credit; (not found)');
+});
+
+test('workbooks without a dictionary distinguish a blank groups cell from an explicit empty list',()=>{
+  const {run}=setup();
+  const tenants=plain(run(`pfUnpack({Properties:[['Property_ID'],['p']],Tenants:[['Property_ID','id','group','groups'],['p','legacy','a',''],['p','cleared','a','[]'],['p','many','a','["a","b"]']]}).props[0].st.tenants`));
+  assert.equal(Object.hasOwn(tenants[0],'groups'),false);
+  assert.deepEqual(tenants[1].groups,[]);
+  assert.deepEqual(tenants[2].groups,['a','b']);
+});
+
+test('legacy JSON and typed workbook cells reject malformed tenant memberships',()=>{
+  const {run}=setup();
+  for(const value of [null,'a',['a','a'],[2]]){
+    const source=JSON.stringify(value);
+    assert.throws(()=>run(`pfUnpackJSON({...blankState(),tenants:[{id:'t',groups:${source}}]})`),/groups/);
+    assert.throws(()=>run(`pfUnpack({Properties:[['Property_ID'],['p']],Tenants:[['Property_ID','id','groups'],['p','t',${JSON.stringify(source)}]],Dictionary:[['Sheet','Column','Type'],['Tenants','groups','json']]})`),/groups/);
+  }
+});
+
 test('JSON readers reject reserved keys at every depth before merging models', () => {
   for (const key of ['__proto__', 'constructor', 'prototype', 'safe.__proto__.legacyPolluted']) {
     for (const wrapped of [false, true]) {

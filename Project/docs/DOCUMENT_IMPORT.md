@@ -1,9 +1,38 @@
-# Document intake and preview safety — 0.7.9
+# Document intake and preview safety — 0.7.14
 
 File previews own a request generation: choosing another template/workbook/file,
 dismissing a preview or opening it invalidates earlier asynchronous reads. A late
 success or error cannot replace the newer filename/model. Clearing document intake
 invalidates in-flight reads and queued files from that batch.
+
+## Finding document import
+
+Open **Portfolio → Document Import**, or **Inputs → Data Workspace → Document Import**.
+Choose **Configure AI** in the upload step, configure your OpenAI/Anthropic API key
+under **Portfolio → Settings**, or use an
+available host integration. Keys stay in memory for the current tab. See
+[settings and AI setup](WORKSPACE_SETTINGS.md). Uploading reads locally; only the
+explicit Extract action sends selected text/images and limited model context.
+
+The progress indicator shows **Upload → Review → Apply**. After extraction,
+uploaded documents collapse into a section you can reopen. **Selected Changes**
+compares the property snapshot at extraction with a validated candidate produced
+by the same mapper as Apply. Source quotes appear for the selected item, rather
+than an unsupported claim that a quote proves every mapped field. Percentages
+are displayed as percentages; the mapper and storage keep their existing units.
+Property/market/valuation choices select individual fields; tenant, expense,
+profile and other item choices include all mapped fields for that item. Review
+the complete changes and uncheck any item you do not want to apply.
+
+Copy mode previews removed rows and explains that the original stays in the
+library. Empty selections cannot apply. A failed candidate validation is shown
+before Apply; existing Apply validation and target checks still enforce atomicity.
+The preview can generate temporary IDs but does not modify the model or source log.
+The formerly ignored selected `goingInCap` input is now mapped and logged.
+
+In-place AI setup retains uploaded documents and pasted text. Cancel discards
+its draft. Saving a provider change invalidates an existing extraction review,
+as before; the dialog explains this and retains documents for another extraction.
 
 ## Local limits
 
@@ -87,3 +116,68 @@ no partial copy. Duplicate apply clicks share a synchronous ownership guard.
 Known field warnings still need underwriting judgment. Structural validation does
 not independently verify every extracted financial assumption or replace review of
 the selected source, dates, units and amounts.
+
+## Expiry and free-rent review (0.7.19)
+
+An accepted explicit expiry selects date-entry mode, preventing an older term
+length from overriding the source date. Keep Current retains the old date and
+mode together. The inactive term-year/month values are preserved.
+
+Free Rent Terms groups the entered month count, start lease month and source of
+the grant (entered months or market). An accepted whole-month grant on a lease-
+month anniversary uses its actual offset; explicit zero removes the primary
+grant. A retained or corrected commencement is applied before deriving these
+dates and fixed-dollar annual rent steps, so review and Apply agree.
+
+The current grant model cannot directly represent arbitrary off-anniversary dates
+or fractional free months. Those proposals remain unapplied with a review note;
+existing free-rent fields are retained. Additional existing free windows are
+also retained and flagged for review. The source schema does not specify partial
+or gross/base-only abatement, so those existing settings are not inferred or
+silently replaced. Confirm them in the lease editor against the source document.
+
+## Extraction evidence, matches and units (0.7.20)
+
+**Apply To** resolves fuzzy/ambiguous matches explicitly. Choosing another target
+clears that proposal's field decisions; duplicate selected targets are blocked.
+Known suites are grouped before missing suites, so an unspecified entry cannot
+join two distinct leases solely through a shared name.
+
+Each reviewed tenant field retains its supplying source. **Source Evidence**
+shows whether its quote occurs in the uploaded page text; **View Source** uses the
+local upload ID even when filenames repeat. Image, missing, short, excluded-page
+and unmatched citations need manual checking. A text match does not verify the
+meaning of a clause. Older item-level citations are labelled as tenant-level.
+
+Rent units are required. A malformed or partly unsupported schedule is withheld
+as a whole and the tenant is unchecked initially. Per-SF rates stay per-SF when
+area changes. Partial abatements keep their actual duration, percentage and
+base/gross scope; no equivalent-full-month conversion is used. New expense lines
+with unknown recoverability are unchecked initially and, if included manually,
+use non-recoverable status with a note. Existing flags are retained when unknown.
+
+See [the extraction guide and remaining limits](AI_EXTRACTION_0_7_20.md).
+
+## Amendment review (0.7.21)
+
+Explicit rent-change scope distinguishes complete schedules, replacement from an
+effective date, and changes to listed steps. Supported historical rent comes from
+an uploaded base lease or the selected existing tenant. Recovery patches preserve
+unmodified base terms; future-effective recovery changes are blocked because the
+current per-lease structure cannot date them. Multiple distinct amendments need
+stated execution dates for ordering.
+
+Unresolved amendments block Apply without hiding review controls. Keep Current
+or a complete manual correction resolves the affected group; merely opening
+Correct does not. Native source-log metadata retains combined citations. See
+[amendment handling and limits](AI_EXTRACTION_0_7_21.md).
+
+## Statement and rent-roll reconciliation (0.7.22)
+
+Document Totals compares each upload using its own source date and statement
+period. It distinguishes matching arithmetic, a mismatch, and insufficient
+information. Zero totals are checked. Original-period expense amounts reconcile
+before supported model inputs are annualized; partial-year per-SF inputs retain
+their stated periods. Invalid financial amounts or periods are withheld from
+proposals, with instructions to enter corrected values manually. See
+[reconciliation and limits](AI_EXTRACTION_0_7_22.md).

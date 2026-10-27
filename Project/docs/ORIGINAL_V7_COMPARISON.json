@@ -1,0 +1,1552 @@
+{
+  "baseline": "original uploaded v7 handoff; reattached and hash verified",
+  "baseline_zip_sha256": "5ccabb5cf57fb58506d095e06e586e18dc1acd1aaf3d3d388abbd04b271d09db",
+  "current_app_sha256": "278301c082f557f8edd5b85e17ddeff9cf5cd232b245f704b4c7eff344d5fbfb",
+  "original_app_sha256": "40c16952d92395ac15c8b0a40059fed35a9fc2c4a41e7d974c65b7fe3750b95c",
+  "canonical_engine_sha256": "ec41e2e17b0be2eca3dce0c20e4aff2303d0269f1496aad0bd2657fc42cfa936",
+  "engine_comparison_note": "The original engine was inline; intentional numerical corrections are documented in docs/FINANCIAL_VALIDATION.md.",
+  "versions": {
+    "original-v7": {
+      "model_routes": [
+        {
+          "id": "property.desc",
+          "label": "Description"
+        },
+        {
+          "id": "property.loc",
+          "label": "Location"
+        },
+        {
+          "id": "property.add",
+          "label": "Additional"
+        },
+        {
+          "id": "property.policies",
+          "label": "Modeling Policies"
+        },
+        {
+          "id": "property.area",
+          "label": "Area Measures"
+        },
+        {
+          "id": "property.gl",
+          "label": "Ground Leases"
+        },
+        {
+          "id": "property.timing",
+          "label": "Payment Timing"
+        },
+        {
+          "id": "property.actuals",
+          "label": "Actuals & Budget"
+        },
+        {
+          "id": "tenants.rr",
+          "label": "Rent Roll"
+        },
+        {
+          "id": "tenants.absorb",
+          "label": "Space Absorption"
+        },
+        {
+          "id": "tenants.recov",
+          "label": "Recoveries"
+        },
+        {
+          "id": "tenants.pr",
+          "label": "Percentage Rent"
+        },
+        {
+          "id": "tenants.sd",
+          "label": "Security Deposits"
+        },
+        {
+          "id": "tenants.mrent",
+          "label": "Miscellaneous Rent"
+        },
+        {
+          "id": "tenants.area",
+          "label": "Area Changes"
+        },
+        {
+          "id": "tenants.incent",
+          "label": "Incentives"
+        },
+        {
+          "id": "tenants.sl",
+          "label": "Straight-Line Rent"
+        },
+        {
+          "id": "tenants.tg",
+          "label": "Tenant Groups"
+        },
+        {
+          "id": "market.infl",
+          "label": "Inflation"
+        },
+        {
+          "id": "market.indices",
+          "label": "Inflation Indices"
+        },
+        {
+          "id": "market.gv",
+          "label": "General Vacancy"
+        },
+        {
+          "id": "market.cl",
+          "label": "Credit Loss"
+        },
+        {
+          "id": "market.ml",
+          "label": "Market Leasing"
+        },
+        {
+          "id": "market.mr",
+          "label": "Market Rent"
+        },
+        {
+          "id": "market.fr",
+          "label": "Free Rent"
+        },
+        {
+          "id": "market.cpi",
+          "label": "CPI Increases"
+        },
+        {
+          "id": "market.ti",
+          "label": "Tenant Improvements"
+        },
+        {
+          "id": "market.lc",
+          "label": "Leasing Commissions"
+        },
+        {
+          "id": "market.ranges",
+          "label": "Ranges"
+        },
+        {
+          "id": "revenues.misc",
+          "label": "Miscellaneous"
+        },
+        {
+          "id": "revenues.park",
+          "label": "Parking"
+        },
+        {
+          "id": "revenues.stor",
+          "label": "Storage"
+        },
+        {
+          "id": "expenses.op",
+          "label": "Operating"
+        },
+        {
+          "id": "expenses.nonop",
+          "label": "Non-Operating"
+        },
+        {
+          "id": "expenses.cap",
+          "label": "Capital"
+        },
+        {
+          "id": "expenses.eg",
+          "label": "Expense Groups"
+        },
+        {
+          "id": "expenses.sched",
+          "label": "Schedules & Inflation"
+        },
+        {
+          "id": "investment.purchase",
+          "label": "Property Purchase"
+        },
+        {
+          "id": "investment.debt",
+          "label": "Debt Financing"
+        },
+        {
+          "id": "valuation.resale",
+          "label": "Property Resale"
+        },
+        {
+          "id": "valuation.pvset",
+          "label": "Present Value"
+        },
+        {
+          "id": "valuation.dcap",
+          "label": "Direct Capitalization"
+        },
+        {
+          "id": "valuation.pos",
+          "label": "Leased Fee / Leasehold"
+        },
+        {
+          "id": "valuation.returns",
+          "label": "Returns"
+        },
+        {
+          "id": "valuation.sens",
+          "label": "Sensitivity"
+        },
+        {
+          "id": "portfolio.members",
+          "label": "Properties"
+        },
+        {
+          "id": "portfolio.cf",
+          "label": "Combined Cash Flow"
+        },
+        {
+          "id": "portfolio.value",
+          "label": "Portfolio Value"
+        },
+        {
+          "id": "tools.dump",
+          "label": "Basis reports"
+        },
+        {
+          "id": "tools.tie",
+          "label": "Reconciliation"
+        },
+        {
+          "id": "tools.file",
+          "label": "Model files"
+        }
+      ],
+      "report_routes": [
+        {
+          "id": "dash.propsum",
+          "label": "Property Summary"
+        },
+        {
+          "id": "dash.tensum",
+          "label": "Tenant Summary"
+        },
+        {
+          "id": "prop.assum",
+          "label": "Assumptions"
+        },
+        {
+          "id": "prop.budget",
+          "label": "Budget Comparison"
+        },
+        {
+          "id": "prop.cf",
+          "label": "Cash Flow"
+        },
+        {
+          "id": "prop.cfasof",
+          "label": "Cash Flow As Of"
+        },
+        {
+          "id": "prop.exec",
+          "label": "Executive Summary"
+        },
+        {
+          "id": "prop.mls",
+          "label": "Market Leasing Summary"
+        },
+        {
+          "id": "prop.mytd",
+          "label": "Month YTD Variance"
+        },
+        {
+          "id": "prop.su",
+          "label": "Sources and Uses"
+        },
+        {
+          "id": "ten.allterms",
+          "label": "All Terms"
+        },
+        {
+          "id": "ten.breaks",
+          "label": "Lease Break Options"
+        },
+        {
+          "id": "ten.expiry",
+          "label": "Lease Expiration"
+        },
+        {
+          "id": "ten.leasesum",
+          "label": "Lease Summary"
+        },
+        {
+          "id": "ten.activity",
+          "label": "Leasing Activity"
+        },
+        {
+          "id": "ten.recstruct",
+          "label": "Recovery Structures Detail"
+        },
+        {
+          "id": "ten.retail",
+          "label": "Retail Revenue & Sales"
+        },
+        {
+          "id": "ten.tcf",
+          "label": "Tenant Cash Flow / LPV"
+        },
+        {
+          "id": "ten.rentroll",
+          "label": "Tenant Rent Roll"
+        },
+        {
+          "id": "audit.occupancy",
+          "label": "Building Area Occupancy"
+        },
+        {
+          "id": "audit.egaudit",
+          "label": "Expense Group Audit"
+        },
+        {
+          "id": "audit.exprec",
+          "label": "Expense Recovery"
+        },
+        {
+          "id": "audit.rentreview",
+          "label": "Income By Rent Review"
+        },
+        {
+          "id": "audit.inputs",
+          "label": "Input Assumptions"
+        },
+        {
+          "id": "audit.leaseaudit",
+          "label": "Lease Audit"
+        },
+        {
+          "id": "audit.praudit",
+          "label": "Percent Rent Audit"
+        },
+        {
+          "id": "audit.resale",
+          "label": "Property Resale"
+        },
+        {
+          "id": "audit.recaudit",
+          "label": "Recovery Audit"
+        },
+        {
+          "id": "audit.rsaudit",
+          "label": "Rent Schedule Audit"
+        },
+        {
+          "id": "audit.usetype",
+          "label": "Use Type Audit"
+        },
+        {
+          "id": "audit.scrub",
+          "label": "Scrub (Basis)"
+        },
+        {
+          "id": "audit.validate",
+          "label": "Validation (Basis)"
+        },
+        {
+          "id": "debt.covgraph",
+          "label": "Covenant Breach Graph"
+        },
+        {
+          "id": "debt.covrep",
+          "label": "Covenant Breach Reporting"
+        },
+        {
+          "id": "debt.amort",
+          "label": "Loan Amortization"
+        },
+        {
+          "id": "debt.loanint",
+          "label": "Loan Interest"
+        },
+        {
+          "id": "val.irrmx",
+          "label": "IRR Matrix"
+        },
+        {
+          "id": "val.pv",
+          "label": "Present Value"
+        },
+        {
+          "id": "val.pvasof",
+          "label": "Present Value As Of"
+        },
+        {
+          "id": "val.resalemx",
+          "label": "Resale Matrix"
+        },
+        {
+          "id": "val.rot",
+          "label": "Returns Over Time"
+        },
+        {
+          "id": "val.vrs",
+          "label": "Valuation & Return Summary"
+        },
+        {
+          "id": "val.valmx",
+          "label": "Value Matrix"
+        },
+        {
+          "id": "val.yearly",
+          "label": "Yearly Valuation"
+        }
+      ],
+      "pane_keys": [
+        "expenses.cap",
+        "expenses.eg",
+        "expenses.nonop",
+        "expenses.op",
+        "expenses.sched",
+        "investment.debt",
+        "investment.purchase",
+        "market.cl",
+        "market.cpi",
+        "market.fr",
+        "market.gv",
+        "market.indices",
+        "market.infl",
+        "market.lc",
+        "market.ml",
+        "market.mr",
+        "market.ranges",
+        "market.ti",
+        "portfolio.cf",
+        "portfolio.members",
+        "portfolio.value",
+        "property.actuals",
+        "property.add",
+        "property.area",
+        "property.desc",
+        "property.gl",
+        "property.loc",
+        "property.policies",
+        "property.timing",
+        "reports.cf",
+        "reports.expiry",
+        "reports.leasesum",
+        "reports.occupancy",
+        "reports.rollover",
+        "reports.scrub",
+        "reports.validate",
+        "revenues.misc",
+        "revenues.park",
+        "revenues.stor",
+        "tenants.absorb",
+        "tenants.area",
+        "tenants.incent",
+        "tenants.mrent",
+        "tenants.pr",
+        "tenants.recov",
+        "tenants.rr",
+        "tenants.sd",
+        "tenants.sl",
+        "tenants.tg",
+        "tools.argus",
+        "tools.dump",
+        "tools.file",
+        "tools.import",
+        "tools.tie",
+        "valuation.assump",
+        "valuation.dcap",
+        "valuation.debt",
+        "valuation.pos",
+        "valuation.pvset",
+        "valuation.resale",
+        "valuation.returns",
+        "valuation.sens"
+      ],
+      "report_keys": [
+        "activity",
+        "allterms",
+        "amort",
+        "assum",
+        "breaks",
+        "budget",
+        "cf",
+        "cfasof",
+        "covgraph",
+        "covrep",
+        "egaudit",
+        "exec",
+        "expiry",
+        "exprec",
+        "inputs",
+        "irrmx",
+        "leaseaudit",
+        "leasesum",
+        "loanint",
+        "mls",
+        "mytd",
+        "occupancy",
+        "praudit",
+        "propsum",
+        "pv",
+        "pvasof",
+        "recaudit",
+        "recstruct",
+        "rentreview",
+        "rentroll",
+        "resale",
+        "resalemx",
+        "retail",
+        "rot",
+        "rsaudit",
+        "scrub",
+        "su",
+        "tcf",
+        "tensum",
+        "usetype",
+        "validate",
+        "valmx",
+        "vrs",
+        "yearly"
+      ],
+      "model_keys": [
+        "acqCosts",
+        "actEnd",
+        "actuals",
+        "addr",
+        "addr2",
+        "amortYears",
+        "appraisalNo",
+        "areaUnit",
+        "areas",
+        "budgets",
+        "caps",
+        "city",
+        "clRate",
+        "classes",
+        "costSale",
+        "country",
+        "county",
+        "cpis",
+        "currency",
+        "dcAdj",
+        "dcRate",
+        "dcRound",
+        "dcYear",
+        "discount",
+        "egroups",
+        "entityId",
+        "exitCap",
+        "fixedGrossOnly",
+        "frees",
+        "goingInCap",
+        "groundLeases",
+        "guMonthly",
+        "gvAnnual",
+        "gvCalcMonth",
+        "gvCredit",
+        "gvOvLapses",
+        "gvPerTenant",
+        "gvRate",
+        "ib_cap",
+        "ib_misc",
+        "ib_mkt",
+        "ib_non",
+        "ib_op",
+        "indices",
+        "infl",
+        "inflCPI",
+        "inflExp",
+        "inflRent",
+        "inflYearOne",
+        "ioOnly",
+        "label",
+        "lat",
+        "lcNetFree",
+        "lcs",
+        "lng",
+        "loanFee",
+        "loanNo",
+        "loanOn",
+        "ltv",
+        "misc",
+        "mktInflLag",
+        "mktInflMonthly",
+        "mlas",
+        "mrents",
+        "msa",
+        "name",
+        "nonOpInPV",
+        "nonops",
+        "notes",
+        "ops",
+        "ownership",
+        "parcel",
+        "parking",
+        "payTimes",
+        "pctOwned",
+        "portCap",
+        "portDisc",
+        "portName",
+        "portSingleExit",
+        "portfolio",
+        "portfolioName",
+        "preparer",
+        "price",
+        "priceMode",
+        "prop13Base",
+        "ptype",
+        "purchaseDate",
+        "pvMode",
+        "ranges",
+        "rate",
+        "recs",
+        "reportEnd",
+        "reportStart",
+        "resaleNoi",
+        "roundMktLeases",
+        "roundMktMode",
+        "saleAdj",
+        "saleDed",
+        "sdIntRate",
+        "slAcqBreak",
+        "startMonth",
+        "startYear",
+        "state",
+        "storage",
+        "submarket",
+        "template",
+        "tenants",
+        "tgroups",
+        "ties",
+        "tis",
+        "useInflBegins",
+        "valDate",
+        "valDays",
+        "yearBuilt",
+        "yearRenov",
+        "years",
+        "zip"
+      ],
+      "bulk_reports": {
+        "Property Summary": {
+          "headings": [
+            "Metric",
+            "Value"
+          ],
+          "row_count": 6,
+          "row_widths": [
+            2
+          ]
+        },
+        "Tenant Summary": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            6
+          ]
+        },
+        "Tenant Rent Roll": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            6
+          ]
+        },
+        "Cash Flow": {
+          "headings": [
+            "Metric",
+            2026,
+            2027,
+            2028,
+            2029,
+            2030,
+            2031,
+            2032,
+            2033,
+            2034,
+            2035
+          ],
+          "row_count": 2,
+          "row_widths": [
+            11,
+            12
+          ]
+        },
+        "All Terms Report": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            6
+          ]
+        }
+      },
+      "argus_panel_present": true,
+      "argus_in_navigation": false,
+      "summary_blocks": {
+        "property": [
+          "chart"
+        ],
+        "tenant": [
+          "table"
+        ]
+      },
+      "policy_gaps": [
+        {
+          "group": "General",
+          "name": "Use Intelligent Renewals",
+          "note": "False"
+        },
+        {
+          "group": "Tenants",
+          "name": "Rent for CPI Increases",
+          "note": "Rent in Prior 12 Months"
+        },
+        {
+          "group": "Tenants",
+          "name": "Reset CPI on changes to Base Rent",
+          "note": ""
+        },
+        {
+          "group": "Tenants",
+          "name": "Use Exact Increase Amount for CPI Increases",
+          "note": ""
+        },
+        {
+          "group": "Tenants",
+          "name": "Calculate a Full Year of CPI for Partial Year Leases",
+          "note": ""
+        },
+        {
+          "group": "Recoveries",
+          "name": "Calculate admin fee before Anchor Contribution deduction; Calculate Base Year Stop Before Admin Fees",
+          "note": "No anchor contributions yet"
+        }
+      ],
+      "irr": {
+        "multiple": null,
+        "tangent": null,
+        "ordinary": 0.09999999999999998
+      },
+      "argus_panel_via_normal_router": "ARGUS IMPORT\nDrop an XL4ADW workbook or ARGUS dump package here\nBasis reads ARGUS's Input Assumptions Report and builds the whole model from it: no AI, no other input. If the file also has ARGUS's Cash Flow, Basis runs the model and checks it against ARGUS line by line, with the DCF value, before you open it.\nARGUS EXPORT\n\nFill an ARGUS XL4ADW input workbook with this model, then load it into ARGUS with Send Data to AE. Values are written in ARGUS's own formats, and the workbook keeps its dropdowns and AE Reference Sheet.\n\nDrop an XL4ADW input workbook, or click to choose\nFrom any property: in Excel, ARGUS AE \u2192 Create Input Sheets \u2192 Select All \u2192 Fill sheets with AE Data, then save. Basis uses it for the layout only; nothing from that property is copied into this one.",
+      "argus_panel_constructs": true,
+      "portfolio_controls": {
+        "include_rollup": 1,
+        "group_by": 1,
+        "classifications": true
+      },
+      "download_service_available": false,
+      "source_log_downloads_after_click": [],
+      "browser_errors": []
+    },
+    "v7.13": {
+      "model_routes": [
+        {
+          "id": "property.desc",
+          "label": "Description"
+        },
+        {
+          "id": "property.loc",
+          "label": "Location"
+        },
+        {
+          "id": "property.add",
+          "label": "Additional"
+        },
+        {
+          "id": "property.policies",
+          "label": "Modeling Policies"
+        },
+        {
+          "id": "property.area",
+          "label": "Area Measures"
+        },
+        {
+          "id": "property.gl",
+          "label": "Ground Leases"
+        },
+        {
+          "id": "property.timing",
+          "label": "Payment Timing"
+        },
+        {
+          "id": "property.actuals",
+          "label": "Actuals & Budget"
+        },
+        {
+          "id": "tenants.rr",
+          "label": "Rent Roll"
+        },
+        {
+          "id": "tenants.absorb",
+          "label": "Space Absorption"
+        },
+        {
+          "id": "tenants.recov",
+          "label": "Recoveries"
+        },
+        {
+          "id": "tenants.pr",
+          "label": "Percentage Rent"
+        },
+        {
+          "id": "tenants.sd",
+          "label": "Security Deposits"
+        },
+        {
+          "id": "tenants.mrent",
+          "label": "Miscellaneous Rent"
+        },
+        {
+          "id": "tenants.area",
+          "label": "Area Changes"
+        },
+        {
+          "id": "tenants.incent",
+          "label": "Incentives"
+        },
+        {
+          "id": "tenants.sl",
+          "label": "Straight-Line Rent"
+        },
+        {
+          "id": "tenants.tg",
+          "label": "Tenant Groups"
+        },
+        {
+          "id": "market.infl",
+          "label": "Inflation"
+        },
+        {
+          "id": "market.indices",
+          "label": "Inflation Indices"
+        },
+        {
+          "id": "market.gv",
+          "label": "General Vacancy"
+        },
+        {
+          "id": "market.cl",
+          "label": "Credit Loss"
+        },
+        {
+          "id": "market.ml",
+          "label": "Market Leasing"
+        },
+        {
+          "id": "market.mr",
+          "label": "Market Rent"
+        },
+        {
+          "id": "market.fr",
+          "label": "Free Rent"
+        },
+        {
+          "id": "market.cpi",
+          "label": "CPI Increases"
+        },
+        {
+          "id": "market.ti",
+          "label": "Tenant Improvements"
+        },
+        {
+          "id": "market.lc",
+          "label": "Leasing Commissions"
+        },
+        {
+          "id": "market.ranges",
+          "label": "Ranges"
+        },
+        {
+          "id": "revenues.misc",
+          "label": "Miscellaneous"
+        },
+        {
+          "id": "revenues.park",
+          "label": "Parking"
+        },
+        {
+          "id": "revenues.stor",
+          "label": "Storage"
+        },
+        {
+          "id": "expenses.op",
+          "label": "Operating"
+        },
+        {
+          "id": "expenses.nonop",
+          "label": "Non-Operating"
+        },
+        {
+          "id": "expenses.cap",
+          "label": "Capital"
+        },
+        {
+          "id": "expenses.eg",
+          "label": "Expense Groups"
+        },
+        {
+          "id": "expenses.sched",
+          "label": "Schedules & Inflation"
+        },
+        {
+          "id": "investment.purchase",
+          "label": "Property Purchase"
+        },
+        {
+          "id": "investment.debt",
+          "label": "Debt Financing"
+        },
+        {
+          "id": "valuation.resale",
+          "label": "Property Resale"
+        },
+        {
+          "id": "valuation.pvset",
+          "label": "Present Value"
+        },
+        {
+          "id": "valuation.dcap",
+          "label": "Direct Capitalization"
+        },
+        {
+          "id": "valuation.pos",
+          "label": "Leased Fee / Leasehold"
+        },
+        {
+          "id": "valuation.returns",
+          "label": "Returns"
+        },
+        {
+          "id": "valuation.sens",
+          "label": "Sensitivity"
+        },
+        {
+          "id": "portfolio.members",
+          "label": "Properties"
+        },
+        {
+          "id": "portfolio.cf",
+          "label": "Combined Cash Flow"
+        },
+        {
+          "id": "portfolio.value",
+          "label": "Portfolio Value"
+        },
+        {
+          "id": "tools.import",
+          "label": "Document Import"
+        },
+        {
+          "id": "tools.argus",
+          "label": "ARGUS / XL4ADW"
+        },
+        {
+          "id": "tools.dump",
+          "label": "Basis Reports"
+        },
+        {
+          "id": "tools.tie",
+          "label": "Reconciliation"
+        },
+        {
+          "id": "tools.file",
+          "label": "Model Files"
+        }
+      ],
+      "report_routes": [
+        {
+          "id": "dash.propsum",
+          "label": "Property Summary"
+        },
+        {
+          "id": "dash.tensum",
+          "label": "Tenant Summary"
+        },
+        {
+          "id": "prop.assum",
+          "label": "Assumptions"
+        },
+        {
+          "id": "prop.budget",
+          "label": "Budget Comparison"
+        },
+        {
+          "id": "prop.cf",
+          "label": "Cash Flow"
+        },
+        {
+          "id": "prop.cfasof",
+          "label": "Cash Flow As Of"
+        },
+        {
+          "id": "prop.exec",
+          "label": "Executive Summary"
+        },
+        {
+          "id": "prop.mls",
+          "label": "Market Leasing Summary"
+        },
+        {
+          "id": "prop.mytd",
+          "label": "Month YTD Variance"
+        },
+        {
+          "id": "prop.su",
+          "label": "Sources And Uses"
+        },
+        {
+          "id": "ten.allterms",
+          "label": "All Terms"
+        },
+        {
+          "id": "ten.breaks",
+          "label": "Lease Break Options"
+        },
+        {
+          "id": "ten.expiry",
+          "label": "Lease Expiration"
+        },
+        {
+          "id": "ten.leasesum",
+          "label": "Lease Summary"
+        },
+        {
+          "id": "ten.activity",
+          "label": "Leasing Activity"
+        },
+        {
+          "id": "ten.recstruct",
+          "label": "Recovery Structures Detail"
+        },
+        {
+          "id": "ten.retail",
+          "label": "Retail Revenue & Sales"
+        },
+        {
+          "id": "ten.tcf",
+          "label": "Tenant Cash Flow / LPV"
+        },
+        {
+          "id": "ten.rentroll",
+          "label": "Tenant Rent Roll"
+        },
+        {
+          "id": "audit.occupancy",
+          "label": "Building Area Occupancy"
+        },
+        {
+          "id": "audit.egaudit",
+          "label": "Expense Group Audit"
+        },
+        {
+          "id": "audit.exprec",
+          "label": "Expense Recovery"
+        },
+        {
+          "id": "audit.rentreview",
+          "label": "Income By Rent Review"
+        },
+        {
+          "id": "audit.inputs",
+          "label": "Input Assumptions"
+        },
+        {
+          "id": "audit.leaseaudit",
+          "label": "Lease Audit"
+        },
+        {
+          "id": "audit.praudit",
+          "label": "Percent Rent Audit"
+        },
+        {
+          "id": "audit.resale",
+          "label": "Property Resale"
+        },
+        {
+          "id": "audit.recaudit",
+          "label": "Recovery Audit"
+        },
+        {
+          "id": "audit.rsaudit",
+          "label": "Rent Schedule Audit"
+        },
+        {
+          "id": "audit.usetype",
+          "label": "Use Type Audit"
+        },
+        {
+          "id": "audit.scrub",
+          "label": "Scrub (Basis)"
+        },
+        {
+          "id": "audit.validate",
+          "label": "Validation (Basis)"
+        },
+        {
+          "id": "debt.covgraph",
+          "label": "Covenant Breach Graph"
+        },
+        {
+          "id": "debt.covrep",
+          "label": "Covenant Breach Reporting"
+        },
+        {
+          "id": "debt.amort",
+          "label": "Loan Amortization"
+        },
+        {
+          "id": "debt.loanint",
+          "label": "Loan Interest"
+        },
+        {
+          "id": "val.irrmx",
+          "label": "IRR Matrix"
+        },
+        {
+          "id": "val.pv",
+          "label": "Present Value"
+        },
+        {
+          "id": "val.pvasof",
+          "label": "Present Value As Of"
+        },
+        {
+          "id": "val.resalemx",
+          "label": "Resale Matrix"
+        },
+        {
+          "id": "val.rot",
+          "label": "Returns Over Time"
+        },
+        {
+          "id": "val.vrs",
+          "label": "Valuation & Return Summary"
+        },
+        {
+          "id": "val.valmx",
+          "label": "Value Matrix"
+        },
+        {
+          "id": "val.yearly",
+          "label": "Yearly Valuation"
+        }
+      ],
+      "pane_keys": [
+        "expenses.cap",
+        "expenses.eg",
+        "expenses.nonop",
+        "expenses.op",
+        "expenses.sched",
+        "investment.debt",
+        "investment.purchase",
+        "market.cl",
+        "market.cpi",
+        "market.fr",
+        "market.gv",
+        "market.indices",
+        "market.infl",
+        "market.lc",
+        "market.ml",
+        "market.mr",
+        "market.ranges",
+        "market.ti",
+        "portfolio.cf",
+        "portfolio.members",
+        "portfolio.value",
+        "property.actuals",
+        "property.add",
+        "property.area",
+        "property.desc",
+        "property.gl",
+        "property.loc",
+        "property.policies",
+        "property.timing",
+        "reports.cf",
+        "reports.expiry",
+        "reports.leasesum",
+        "reports.occupancy",
+        "reports.rollover",
+        "reports.scrub",
+        "reports.validate",
+        "revenues.misc",
+        "revenues.park",
+        "revenues.stor",
+        "tenants.absorb",
+        "tenants.area",
+        "tenants.incent",
+        "tenants.mrent",
+        "tenants.pr",
+        "tenants.recov",
+        "tenants.rr",
+        "tenants.sd",
+        "tenants.sl",
+        "tenants.tg",
+        "tools.argus",
+        "tools.dump",
+        "tools.file",
+        "tools.import",
+        "tools.tie",
+        "valuation.assump",
+        "valuation.dcap",
+        "valuation.debt",
+        "valuation.pos",
+        "valuation.pvset",
+        "valuation.resale",
+        "valuation.returns",
+        "valuation.sens"
+      ],
+      "report_keys": [
+        "activity",
+        "allterms",
+        "amort",
+        "assum",
+        "breaks",
+        "budget",
+        "cf",
+        "cfasof",
+        "covgraph",
+        "covrep",
+        "egaudit",
+        "exec",
+        "expiry",
+        "exprec",
+        "inputs",
+        "irrmx",
+        "leaseaudit",
+        "leasesum",
+        "loanint",
+        "mls",
+        "mytd",
+        "occupancy",
+        "praudit",
+        "propsum",
+        "pv",
+        "pvasof",
+        "recaudit",
+        "recstruct",
+        "rentreview",
+        "rentroll",
+        "resale",
+        "resalemx",
+        "retail",
+        "rot",
+        "rsaudit",
+        "scrub",
+        "su",
+        "tcf",
+        "tensum",
+        "usetype",
+        "validate",
+        "valmx",
+        "vrs",
+        "yearly"
+      ],
+      "model_keys": [
+        "acqCosts",
+        "actEnd",
+        "actuals",
+        "addr",
+        "addr2",
+        "amortYears",
+        "appraisalNo",
+        "areaUnit",
+        "areas",
+        "budgets",
+        "caps",
+        "city",
+        "clRate",
+        "classes",
+        "costSale",
+        "country",
+        "county",
+        "cpis",
+        "currency",
+        "dcAdj",
+        "dcRate",
+        "dcRound",
+        "dcYear",
+        "discount",
+        "egroups",
+        "entityId",
+        "exitCap",
+        "fixedGrossOnly",
+        "frees",
+        "goingInCap",
+        "groundLeases",
+        "guMonthly",
+        "gvAnnual",
+        "gvCalcMonth",
+        "gvCredit",
+        "gvOvLapses",
+        "gvPerTenant",
+        "gvRate",
+        "ib_cap",
+        "ib_misc",
+        "ib_mkt",
+        "ib_non",
+        "ib_op",
+        "indices",
+        "infl",
+        "inflCPI",
+        "inflExp",
+        "inflRent",
+        "inflYearOne",
+        "ioOnly",
+        "label",
+        "lat",
+        "lcNetFree",
+        "lcs",
+        "lng",
+        "loanFee",
+        "loanNo",
+        "loanOn",
+        "ltv",
+        "misc",
+        "mktInflLag",
+        "mktInflMonthly",
+        "mlas",
+        "mrents",
+        "msa",
+        "name",
+        "nonOpInPV",
+        "nonops",
+        "notes",
+        "ops",
+        "ownership",
+        "parcel",
+        "parking",
+        "payTimes",
+        "pctOwned",
+        "portCap",
+        "portDisc",
+        "portName",
+        "portResaleNoi",
+        "portSingleExit",
+        "portfolio",
+        "portfolioName",
+        "preparer",
+        "price",
+        "priceMode",
+        "prop13Base",
+        "ptype",
+        "purchaseDate",
+        "pvMode",
+        "ranges",
+        "rate",
+        "recs",
+        "reportEnd",
+        "reportStart",
+        "resaleNoi",
+        "roundMktLeases",
+        "roundMktMode",
+        "saleAdj",
+        "saleDed",
+        "sdIntRate",
+        "slAcqBreak",
+        "startMonth",
+        "startYear",
+        "state",
+        "storage",
+        "submarket",
+        "template",
+        "tenants",
+        "tgroups",
+        "ties",
+        "tis",
+        "useInflBegins",
+        "valDate",
+        "valDays",
+        "yearBuilt",
+        "yearRenov",
+        "years",
+        "zip"
+      ],
+      "bulk_reports": {
+        "Property Summary": {
+          "headings": [
+            "Metric",
+            "Value"
+          ],
+          "row_count": 6,
+          "row_widths": [
+            2
+          ]
+        },
+        "Tenant Summary": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent",
+            "Tenant Groups"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            7
+          ]
+        },
+        "Tenant Rent Roll": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent",
+            "Tenant Groups"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            7
+          ]
+        },
+        "Cash Flow": {
+          "headings": [
+            "Metric",
+            2026,
+            2027,
+            2028,
+            2029,
+            2030,
+            2031,
+            2032,
+            2033,
+            2034,
+            2035
+          ],
+          "row_count": 2,
+          "row_widths": [
+            11
+          ]
+        },
+        "All Terms Report": {
+          "headings": [
+            "Tenant",
+            "Suite",
+            "Area SF",
+            "Start",
+            "End",
+            "Base rent",
+            "Tenant Groups"
+          ],
+          "row_count": 5,
+          "row_widths": [
+            7
+          ]
+        }
+      },
+      "argus_panel_present": true,
+      "argus_in_navigation": true,
+      "summary_blocks": {
+        "property": [
+          "chart"
+        ],
+        "tenant": [
+          "table"
+        ]
+      },
+      "policy_gaps": [
+        {
+          "group": "General",
+          "name": "Use Intelligent Renewals",
+          "note": "False"
+        },
+        {
+          "group": "Tenants",
+          "name": "Rent for CPI Increases",
+          "note": "Rent in Prior 12 Months"
+        },
+        {
+          "group": "Tenants",
+          "name": "Reset CPI on changes to Base Rent",
+          "note": ""
+        },
+        {
+          "group": "Tenants",
+          "name": "Use Exact Increase Amount for CPI Increases",
+          "note": ""
+        },
+        {
+          "group": "Tenants",
+          "name": "Calculate a Full Year of CPI for Partial Year Leases",
+          "note": ""
+        },
+        {
+          "group": "Recoveries",
+          "name": "Calculate admin fee before Anchor Contribution deduction; Calculate Base Year Stop Before Admin Fees",
+          "note": "No anchor contributions yet"
+        }
+      ],
+      "irr": {
+        "multiple": null,
+        "tangent": null,
+        "ordinary": 0.10000000000000006
+      },
+      "argus_panel_via_normal_router": "ARGUS IMPORT\nDrop an XL4ADW workbook or ARGUS dump package here\nBasis reads ARGUS's Input Assumptions Report and builds the whole model from it: no AI, no other input. If the file also has ARGUS's Cash Flow, Basis runs the model and checks it against ARGUS line by line, with the DCF value, before you open it.\nARGUS EXPORT\n\nFill an ARGUS XL4ADW input workbook with this model, then load it into ARGUS with Send Data to AE. Values are written in ARGUS's own formats, and the workbook keeps its dropdowns and AE Reference Sheet.\n\nDrop an XL4ADW input workbook, or click to choose\nFrom any property: in Excel, ARGUS AE \u2192 Create Input Sheets \u2192 Select All \u2192 Fill sheets with AE Data, then save. Basis uses it for the layout only; nothing from that property is copied into this one.",
+      "argus_panel_constructs": true,
+      "portfolio_controls": {
+        "include_rollup": 1,
+        "group_by": 1,
+        "classifications": true
+      },
+      "download_service_available": false,
+      "source_log_downloads_after_click": [
+        "basis-source-log.csv"
+      ],
+      "browser_errors": []
+    }
+  },
+  "comparison": {
+    "model_routes": {
+      "before": 51,
+      "after": 53,
+      "removed": [],
+      "added": [
+        "tools.argus",
+        "tools.import"
+      ]
+    },
+    "report_routes": {
+      "before": 44,
+      "after": 44,
+      "removed": [],
+      "added": []
+    },
+    "pane_keys": {
+      "before": 62,
+      "after": 62,
+      "removed": [],
+      "added": []
+    },
+    "report_keys": {
+      "before": 44,
+      "after": 44,
+      "removed": [],
+      "added": []
+    },
+    "model_keys": {
+      "before": 117,
+      "after": 118,
+      "removed": [],
+      "added": [
+        "portResaleNoi"
+      ]
+    }
+  }
+}

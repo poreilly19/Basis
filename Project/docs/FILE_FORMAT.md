@@ -55,6 +55,17 @@ Known record collections must be arrays of JSON objects; null, primitive and arr
 
 Known references must be strings (or omitted/null), and known numeric input fields reject object/array/boolean payloads. Financial amounts and rates retain legacy numeric strings without coercing the stored inputs; negative amounts, blank overrides and unknown enums are not given new financial interpretations by this validator. Inflation `rates` must be an array of numbers, numeric text or null.
 
+As of 0.7.13, optional `tenants[].groups` contains up to 1,000 unique, nonempty
+string references to `tgroups[].id`, each at most 1,000 characters. When present,
+this array is authoritative; `[]` means no groups. Otherwise the legacy scalar
+`tenants[].group` supplies the one membership. The editor mirrors the first ID
+to that scalar for older readers, but reading does not migrate the data. Unknown
+group IDs are retained, and deleting one group preserves other memberships.
+Malformed arrays, null, duplicate IDs and non-string entries are rejected, also
+inside embedded properties. This additive schema-v1 field is classification
+metadata and does not change financial calculations. See [tenant groups](TENANT_GROUPS.md)
+for workbook cells and compatibility with older builds and external adapters.
+
 Computation limits reject inputs that would otherwise create unbounded loops or allocations: work-driving market/tenant/option terms, hold-over durations, market downtime, month-based rent schedule offsets, absorption intervals and payment spreads are limited to 1200 months (100 years); a tenant's explicit start/end dates may span at most 1200 months. Term years and months are checked separately and in combination. This limit does not restrict a ground lease's term, whose calculation is already bounded by the analysis horizon. Active absorption blocks, including linked reabsorption areas, may generate at most 10,000 leases per property. This is an input-size safeguard, not a recommendation on lease economics.
 
 These checks establish structural and computation-size safety for supported inputs. Comprehensive financial field validation and relationship checks remain a **next milestone**; do not imply that passing this validator certifies underwriting assumptions or every engine path.

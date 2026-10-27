@@ -133,3 +133,14 @@ and recovery tests remain separate. These checks establish targeted extraction
 parity; they do not certify every underwriting path or replace browser/worker
 workflow testing. Future intentional numerical changes require new independently
 specified expected results and an explanation before baseline fingerprints change.
+
+## Accuracy changes after extraction
+
+Version 0.7.19 corrects gross-up below 10% occupancy and recognizes actual debt
+draws/advances within the selected hold when producing levered returns, including
+price and hold sensitivities. It adds a finding for a valuation date outside the
+first analysis month without altering the existing fractional-month convention.
+The original extraction fingerprints remain unchanged; new independent cases
+cover the corrected scenarios. See [financial evidence](FINANCIAL_VALIDATION.md)
+and [the 0.7.19 review](ACCURACY_0_7_19.md) before interpreting historical
+byte-identity statements as applying to the current engine.

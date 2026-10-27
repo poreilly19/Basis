@@ -11,7 +11,7 @@ function setup(){
     crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,console:{error(){}},uid:()=>String(++id),
     localStorage:{getItem:()=>null,setItem(){}},document:{addEventListener(){},createTextNode:text=>({text})},addEventListener(){},window:{},$:()=>null,
     kAlert:text=>alerts.push(text),blankState:()=>model('Blank'),calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),mKey:()=>'',
-    num:value=>Number.isFinite(Number(value))?Number(value):0,recalc(){},renderKPI(){},drawPane:()=>counts.draw++,
+    num:value=>Number.isFinite(Number(value))?Number(value):0,recalc(){},renderKPI(){},basisRenderContext(){},drawPane:()=>counts.draw++,
     PANES:{},T1:'property',MODE:'inputs',sampleState:()=>model('Sample'),setMode(){},OFFICE_ZIP_LIMITS:{archive:2048},
     pfReadFile:async file=>{counts.read++;return file.result||await file.pending;},
     DIRTY:()=>counts.dirty++,grid:()=>({}),inp:()=>({}),titled:(_title,body)=>body,

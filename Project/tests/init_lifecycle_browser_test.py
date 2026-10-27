@@ -33,6 +33,7 @@ class InitializationBrowserTests(unittest.TestCase):
         self.assertEqual(result['index']['rev'], removed['revision'])
         self.assertEqual(result['index']['props'], [])
         self.assertIsNone(result['removedHeader'])
+        support.open_library_actions(self.page)
         expect(self.page.get_by_role('button', name='Recover drafts', exact=True)).to_be_visible()
 
     def test_corrupt_index_starts_a_writable_recovery_workspace_without_replacing_source(self):

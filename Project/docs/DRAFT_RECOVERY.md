@@ -1,5 +1,7 @@
 # Local draft recovery
 
+Open **Portfolio → File → Recover drafts** to view, export or restore local drafts.
+
 The library remains the saved source of truth. Recovery drafts are separate local
 copies of edits that may not have reached that library. Restoring a draft creates
 a new property with a unique “(recovered)” name; it never replaces an existing

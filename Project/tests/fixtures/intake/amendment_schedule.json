@@ -1,0 +1,136 @@
+{
+  "description": "Synthetic source facts and provider responses. Expected monthly and annual results are independently specified.",
+  "documents": [
+    {
+      "id": "base",
+      "name": "Base Lease.txt",
+      "pages": [
+        {
+          "n": 1,
+          "text": "Harbor Research LLC leases Suite 100, 1,000 SF, from January 1, 2026 through December 31, 2030. Annual rent: $12,000 from January 1, 2026; $13,200 from January 1, 2027; $14,400 from January 1, 2028."
+        }
+      ],
+      "results": [
+        {
+          "docType": "lease",
+          "tenants": [
+            {
+              "name": "Harbor Research LLC",
+              "suite": "100",
+              "sf": 1000,
+              "start": "2026-01-01",
+              "end": "2030-12-31",
+              "rent": [
+                {
+                  "from": "2026-01-01",
+                  "amount": 12000,
+                  "unit": "annual"
+                },
+                {
+                  "from": "2027-01-01",
+                  "amount": 13200,
+                  "unit": "annual"
+                },
+                {
+                  "from": "2028-01-01",
+                  "amount": 14400,
+                  "unit": "annual"
+                }
+              ],
+              "src": {
+                "page": 1,
+                "quote": "Harbor Research LLC leases Suite 100"
+              },
+              "fieldSources": {
+                "rent": {
+                  "page": 1,
+                  "quote": "Annual rent: $12,000 from January 1, 2026; $13,200 from January 1, 2027; $14,400 from January 1, 2028."
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "amend",
+      "name": "Amendment 1.txt",
+      "pages": [
+        {
+          "n": 1,
+          "text": "Executed October 1, 2026. Harbor Research LLC, Suite 100. Replace the rent schedule from July 1, 2027 onward: $18,000 per year from July 1, 2027; $19,200 per year from January 1, 2029. Earlier rent is unchanged."
+        }
+      ],
+      "results": [
+        {
+          "docType": "amendment",
+          "amendmentDate": "2026-10-01",
+          "tenants": [
+            {
+              "name": "Harbor Research LLC",
+              "suite": "100",
+              "rent": [
+                {
+                  "from": "2027-07-01",
+                  "amount": 18000,
+                  "unit": "annual"
+                },
+                {
+                  "from": "2029-01-01",
+                  "amount": 19200,
+                  "unit": "annual"
+                }
+              ],
+              "rentChange": {
+                "mode": "replace_from",
+                "effectiveDate": "2027-07-01"
+              },
+              "src": {
+                "page": 1,
+                "quote": "Harbor Research LLC, Suite 100."
+              },
+              "fieldSources": {
+                "rent": {
+                  "page": 1,
+                  "quote": "$18,000 per year from July 1, 2027; $19,200 per year from January 1, 2029."
+                },
+                "rentChange": {
+                  "page": 1,
+                  "quote": "Replace the rent schedule from July 1, 2027 onward"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "yearlyRent": [
+      12000,
+      15600,
+      18000,
+      19200
+    ],
+    "yearTwoMonthlyRent": [
+      1100,
+      1100,
+      1100,
+      1100,
+      1100,
+      1100,
+      1500,
+      1500,
+      1500,
+      1500,
+      1500,
+      1500
+    ],
+    "stepDates": [
+      "2026-01-01",
+      "2027-01-01",
+      "2027-07-01",
+      "2029-01-01"
+    ]
+  }
+}

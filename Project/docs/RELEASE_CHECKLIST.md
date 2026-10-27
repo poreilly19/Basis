@@ -1,5 +1,14 @@
 # Basis release-readiness checklist (not legal clearance)
 
+Current beta handoff: [Cloudflare Pages + Access](CLOUDFLARE_BETA.md).
+Earlier assessment: [public-alpha readiness and original-interface restoration](RELEASE_READINESS_0_7_22.md).
+Current test evidence: [0.7.27 validation](VALIDATION_0_7_27.md).
+The supplied interface's ribbon and left Navigator have been [restored on the corrected app](RIBBON_0_7_25.md). Broad unchecked
+items below include remaining scope even where later targeted cases pass.
+Choosing a public license and completing provenance review are still open.
+The recommendations here do not mean legal counsel is a statutory requirement
+for every open-source release.
+
 ## Native `.basiscre` serialization
 - [x] Browser-facing property export and import
 - [x] Browser-facing active portfolio export and import across scenarios
@@ -68,15 +77,24 @@
 - [x] Prototype-path, rendered-name and spreadsheet-formula regressions
 - [x] Bounded Office ZIP validation and workbook sparse-reference/cell-budget regressions
 - [x] Mobile-sized Chromium mode navigation and keyboard command search
+- [x] Workspace theme/autosave/column preferences, visible Document Import and portfolio-scoped property tabs
+- [x] OpenAI/Anthropic fake-transport checks, session-only keys and explicit extraction/review/Apply
+- [x] Library Actions state and keyboard focus survive background refreshes and recovery
+- [x] Compact property rows, visible save/error state and Essentials rent roll with retained keyboard editing
+- [x] Unfinished AI setup survives preference/background redraws; provider guidance and autosave help reflect current choices
+- [x] Keyboard file selection, shared form label associations and qualified extraction validation wording
+- [ ] Live API account/model/CORS and extraction accuracy on representative leases, rent rolls and P&Ls
 - [ ] Mobile Safari (hosted URL), keyboard, screen-reader testing
 - [ ] Downloads/extension fallback in native app and hosted browsers
 - [x] Pinned CI workflow and portable runners; local runner/launcher unit checks
 - [ ] GitHub-hosted CI execution, Windows/Node 20 validation and release/versioning policy
 
-Current validation: 599 Node cases, 13 Python runner cases, 76 ordinary Chromium workflows and 17 optional real-runtime workflows, plus source/syntax
-checks. See [the validation snapshot](VALIDATION_0_7_9.md) for source identities,
-[the review](CODE_REVIEW.md) and [financial validation](FINANCIAL_VALIDATION.md) for scope and
-limits. Unchecked broad categories above remain incomplete even where a targeted
-subset is checked. The native-module build synchronization is available via
-`npm run build`; the engine and supporting modules are canonical, while most UI
-remains embedded in the HTML. Some calculation paths still run synchronously.
+Current regression evidence is in the [0.7.26 validation snapshot](VALIDATION_0_7_26.md).
+The 17 optional real-runtime checks pass again on the beta candidate. Served-build
+smoke tests additionally cover matching security headers and the real report
+workbook. See the snapshot for browser/platform scope. Live provider validation,
+representative analyst-reviewed documents, native Windows/Safari testing and an
+actual hosting/access configuration remain outstanding. The [beta handoff](BETA_DEPLOYMENT_0_7_26.md)
+records these acceptance steps. Unchecked broad categories above remain incomplete
+even where targeted subsets pass. The engine and supporting modules are canonical;
+most UI remains in the HTML and some calculation paths still run synchronously.

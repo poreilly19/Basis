@@ -1,0 +1,11 @@
+SYNTHETIC BETA ACCEPTANCE FIXTURE — NOT A REAL LEASE
+Property: Beta Example — One Tenant
+Tenant: Example Tenant
+Suite: 001
+Rentable area: 1,000 square feet
+Lease commencement: April 1, 2026
+Lease expiration: December 31, 2035
+Annual base rent: USD 12,125.00, equivalent to USD 12.125 per square foot per year.
+Base rent is unchanged throughout the term. No rent steps, free rent, CPI,
+percentage rent, expense reimbursements, tenant improvements, leasing commissions,
+tenant incentives, security deposits or termination fees apply to this fixture.

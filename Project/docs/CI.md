@@ -46,3 +46,26 @@ Runtime test discovery now happens inside Python with a literal filename pattern
 Missing/altered caches, zero discovered tests, all-skipped runs and test failures
 return nonzero. The `--cache` argument works without shell-specific environment
 assignment. `BASIS_DEPENDENCY_DIR` remains supported for existing scripts.
+
+
+Version 0.7.18 adds `npm run test:launcher` to both Windows and Linux matrix jobs.
+The native CMD integration test is skipped on Linux and runs on Windows. The
+local review exercised Linux only; adding this job does not mean GitHub CI or
+Windows has been executed. The launcher tests use temporary folders with spaces,
+loopback HTTP, occupied-port handling and missing-file/version diagnostics.
+
+Version 0.7.26 adds a separate beta matrix: Chromium, Firefox and WebKit on Ubuntu,
+plus Chromium on Windows. Each job builds `dist/basis-beta`, serves its exact
+security headers and tests startup, blocked unauthorized scripts, manual saving,
+native backup, calculation workers, real report XLSX generation, real PDF
+rendering/cleanup and a simulated AI connection. Install the selected Playwright
+browser, then run `npm run build:beta` and
+`npm run test:beta -- --cache ../basis-runtime-cache --browser firefox` (or
+`chromium` / `webkit`). These configured jobs still need a real GitHub run.
+Local results and platform distinctions are recorded in
+[the 0.7.26 validation snapshot](VALIDATION_0_7_26.md).
+
+Version 0.7.27 also runs `npm run verify:beta` after building each deployment
+candidate, plus Node fixtures for exact hosted byte/header verification and
+anonymous Cloudflare Access probes. These local fixtures do not configure or
+verify a real Cloudflare account.

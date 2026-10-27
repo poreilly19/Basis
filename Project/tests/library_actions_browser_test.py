@@ -54,8 +54,9 @@ class LibraryActionsBrowserTests(unittest.TestCase):
     def assert_visible_originals(self):
         expect(self.page.locator('.pwhead').get_by_label('Portfolio')).to_have_value(self.fixture['pf'])
         expect(self.page.locator('.pwhead').get_by_label('Scenario')).to_have_value(self.fixture['base'])
-        expect(self.page.get_by_role('button', name='First active', exact=True)).to_be_visible()
-        expect(self.page.get_by_role('button', name='Second source', exact=True)).to_be_visible()
+        grid=self.page.locator('.basis-workspace-main')
+        expect(grid.get_by_role('button', name='First active', exact=True)).to_be_visible()
+        expect(grid.get_by_role('button', name='Second source', exact=True)).to_be_visible()
 
     def test_failed_portfolio_delete_preserves_visible_library_and_dirty_current_model(self):
         self.dirty_current_model()
@@ -145,7 +146,7 @@ class LibraryActionsBrowserTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         notice.get_by_role('button', name='OK', exact=True).click()
         self.assert_visible_originals()
-        expect(self.page.get_by_role('button', name='Arrived during confirmation', exact=True)).to_be_visible()
+        expect(self.page.locator('.basis-workspace-main').get_by_role('button', name='Arrived during confirmation', exact=True)).to_be_visible()
         self.assertEqual(self.page.evaluate('''async () => {
           for(const property of PW.ix.props)if(!(await pwGetModel(property.id,property)))return false;
           return true;

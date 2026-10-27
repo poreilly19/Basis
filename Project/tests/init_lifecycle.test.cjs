@@ -41,7 +41,7 @@ function setup({index=savedIndex(),missingPreferred=false,invalidPreferred=false
     crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,btoa,atob,console:{error(){}},uid:()=>prefix+(++id),localStorage:local,sessionStorage:session,
     document:{addEventListener(){}},addEventListener(){},window:{},$:()=>null,kAlert:message=>alerts.push(String(message)),kConfirm:async()=>true,
     blankState:()=>model('Blank'),sampleState:()=>model('Demo sample'),calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),mKey:()=>'',num:value=>Number(value)||0,
-    recalc(){},renderKPI(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',setMode(){},idb:shared.connection()});
+    recalc(){},renderKPI(){},basisRenderContext(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',setMode(){},idb:shared.connection()});
   for(const file of ['scenario_settings.js','native_codec.js','recovery_store.js'])vm.runInContext(fs.readFileSync(path.join(root,'src',file),'utf8'),c);
   // The deployable app may embed validation before or inside the extracted PW block.
   // Either arrangement must provide one copy of the real boundary validator.

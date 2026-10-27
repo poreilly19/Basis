@@ -1,7 +1,17 @@
-# Code review — 0.7.9, 2026-10-20
+# Code review — 0.7.10, 2026-10-21
+
+For the October 27 pass, see [the 0.7.19 accuracy review](ACCURACY_0_7_19.md)
+and [its validation evidence](VALIDATION_0_7_19.md). The preceding broad pass is
+[the expanded 0.7.18 review](CODE_REVIEW_0_7_18.md). The findings below retain
+their original review scope and date.
 
 Reviewed `Basis_Studio_v7_Codex_Handoff.zip`; fixes are in this updated handoff.
-The original upload and earlier reviewed packages remain unchanged. This pass bounds inflation schedule expansion before allocation, fixes reload
+The original upload and earlier reviewed packages remain unchanged. This pass
+removes redundant navigation, improves contrast and Title Case labels, adds
+Workspace Settings, and isolates property tabs to their selected portfolio.
+It makes document intake visible and adds session-only OpenAI/Anthropic API setup
+alongside the existing host integration. Reviewed extractions still require Apply.
+Version 0.7.9 bounds inflation schedule expansion before allocation, fixes reload
 confirmation for unsaved edits under clock collisions/skew, and preserves workbook
 dates across equivalent style XML. The previous pass verified PDF reader/worker
 bytes before execution and closed silent input-loss cases in custom XLSX readers. Earlier work upgraded the spreadsheet
@@ -57,21 +67,33 @@ project license declaration was made; dependency notices/license texts are enclo
 | High | A tiny legacy workbook could expand an unchecked inflation year index into billions of zero-filled array entries. | Validate integer indices and duplicates before allocation; bound each series and the workbook-wide expanded values, including sparse gaps. |
 | High | Reload library compared edit/save timestamps; edits sharing a save timestamp or following a clock rollback could be discarded without confirmation. | Use a dirty marker cleared only when a successful commit stores the exact current model snapshot; older/unrelated/failed commits retain it. |
 | High | Equivalent style XML with single quotes or namespace prefixes left date serials numeric, changing the imported analysis start to a default. | Read format/style metadata from validated DOM nodes and verify dates plus resulting model starts in both workbook epochs. |
+| Medium | Property tabs and the active editor could show a property from another selected portfolio. | Filter tabs by portfolio; guard model/report/document views until a matching property is opened, while remembering each portfolio's tabs. |
+| Medium | The extraction workflow was absent from visible navigation and assumed a host AI service. | Expose Document Import and Settings; add bounded OpenAI/Anthropic adapters with session-only keys, explicit extraction, review and Apply. |
+| Medium | Changing AI providers could leave the wrong model ID selected or expose stale extraction results. | Restore the configured model when returning to a provider, cancel active requests and invalidate reviewed results on setup changes; refresh late host availability in Settings. |
+| Medium | Workspace redraws closed Library Actions and lost keyboard focus during recovery. | Retain the menu element and focused control across redraws; check refresh, keyboard navigation and focus after restoring a draft. |
 
 ## Verification performed
 
 - Original baseline: nine supplied codec tests and source/syntax checks passed in the initial review.
-- `npm test` passes 599 cases, and `npm run test:browser` covers 76 workflows. Final counts, commands and hashes are recorded in [the 0.7.9 validation snapshot](VALIDATION_0_7_9.md). Thirteen canonical application modules and the worker bundle match source exactly; all scripts parse.
+- `npm test` passes 633 cases. Final browser results, commands and hashes are recorded in [the 0.7.10 validation snapshot](VALIDATION_0_7_10.md). Sixteen canonical application modules and the worker bundle match source exactly; all scripts parse.
 - Chromium workflows exercise real downloads/uploads, scenario/exclusion backups, corrupt input, edits across switch/reload, injected failed commits, stale tabs, recovery dialogs, invalid settings, model/workbook attack inputs, mobile navigation, command search and all visible routes. Worker tests cover exact results, cancellation, latest-snapshot publication, input preservation, retry and the embedded worker with external requests blocked. New workflows exercise atomic actions and document extraction with a local fake service; no external extraction requests were made.
 - Earlier Node cases cover corrupt saved indexes/models, storage-key ownership, bounded chunk expansion, independent writable recovery, PDF module failure/retry, cancellation and cleanup, UTF-8 text budgets and image-header limits. Chromium adds recovery/source reload workflows, intercepted paired PDF module loading, pending open/render cancellation and actual PNG/JPEG/WebP canvas conversion.
 - The 0.7.6 pass added 43 Node cases: 15 spreadsheet-loader, 15 import-lifecycle, eight XML, three Office date and two legacy date cases. Eleven additional ordinary browser workflows cover imports and native Office date/XML behavior.
-- The ordinary browser harness blocks external HTTPS and uses synthetic external modules. Seventeen separate optional Chromium checks now execute actual hash-verified PDF.js/SheetJS artifacts served from a local cache: dedicated workers, text/raster/cleanup, corrupt PDF, XLSX round trips/edits, 1904 dates, captured exports and browser SRI rejection/retry. Public artifacts and two Apache 2.0 license texts were fetched; no library code is bundled. See [runtime dependency evidence](RUNTIME_DEPENDENCY_TESTS.md). Live AI/host APIs, broader file corpora and other browsers remain unverified.
+- The ordinary browser harness blocks external HTTPS and uses synthetic external modules. Seventeen optional Chromium checks last passed in 0.7.9 against actual hash-verified PDF.js/SheetJS artifacts: dedicated workers, text/raster/cleanup, corrupt PDF, XLSX round trips/edits, 1904 dates, captured exports and browser SRI rejection/retry. Those runtime sources remain unchanged; this UI pass does not repeat the optional runtime suite. See [runtime dependency evidence](RUNTIME_DEPENDENCY_TESTS.md). Live AI/host APIs, broader file corpora and other browsers remain unverified.
 - Earlier sample comparisons against immutable 0.7.1 and 0.7.2 packages match annual/monthly/debt arrays, valuation components and both IRRs exactly in all three discount modes. Historical original-upload comparisons remain documented separately in [financial validation](FINANCIAL_VALIDATION.md). The original ZIP was unavailable in the current execution environment; this pass does not claim a new read of it.
-- The 0.7.7 pass added 24 Node cases, 13 stdlib runner cases and nine real-workbook workflows. The 0.7.8 pass added 42 Node cases for PDF verification/loading and custom workbook cells, plus five ordinary browser methods for tampering and native XML input validation. The current pass adds 14 Node cases, two ordinary browser methods and one real-runtime method for bounded inflation expansion, reload dirty-marker and date-style regression coverage. The pinned workflow is syntax-checked locally but has not run on GitHub. See [CI scope](CI.md) and [spreadsheet input policy](SPREADSHEET_UPGRADE.md).
-- The financial engine is byte-identical to 0.7.8. This pass changes import validation and reload orchestration; underwriting formulas are unchanged.
+- The 0.7.7 pass added 24 Node cases, 13 stdlib runner cases and nine real-workbook workflows. The 0.7.8 pass added 42 Node cases for PDF verification/loading and custom workbook cells, plus five ordinary browser methods for tampering and native XML input validation. Version 0.7.9 added 14 Node cases, two ordinary browser methods and one real-runtime method for inflation expansion, reload dirty-marker and date-style regressions. Version 0.7.10 adds 34 Node cases and nine browser methods for preferences, adapter formats/errors/cancellation, key lifetime, reviewed Apply, themes, navigation and portfolio boundaries. The pinned workflow has not run on GitHub. See [CI scope](CI.md) and [spreadsheet input policy](SPREADSHEET_UPGRADE.md).
+- The financial engine is byte-identical to 0.7.9. This pass changes preferences, navigation and AI transport; underwriting formulas are unchanged.
 - Environment: Node `24.19.0`, Python `3.12.14`, Playwright `1.62.0`, Chromium `154.0.8037.57` on Linux. Node 20 and other browser engines were not exercised.
 
 ## Recommended next steps, in order
+
+For this UI update, first try the Windows localhost workflow with a representative
+lease, rent roll and P&L. Compare every proposed input with the source, including
+dates, annual/monthly rent, reimbursements and expenses, before Apply. Exercise a
+live OpenAI or Anthropic account to confirm model access, browser CORS and billing;
+the automated tests use fake responses and establish workflow behavior, not
+extraction accuracy. Try light/dark mode, autosave off/on and switching between
+two portfolios with real working models. Then continue the broader backlog:
 
 1. **Complete dependency and real-file validation.** SheetJS 0.20.3 is selected after reviewing upstream metadata, licenses and the two published advisory ranges; this is not a complete security audit. Review pinned PDF versions and bundled-component notices, and broaden malformed-file, encrypted-PDF, font/form and desktop Office fixtures. Cached formulas can be stale; early-1900 serials still need a calendar compatibility decision. See [spreadsheet upgrade evidence](SPREADSHEET_UPGRADE.md).
 2. **Finish host-side concurrency and recovery.** IndexedDB uses atomic revision checks, but the host document API lacks a documented compare-and-swap. Add server-side transactions, authenticated snapshot restoration and retention; see [storage](STORAGE.md).

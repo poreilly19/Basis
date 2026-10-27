@@ -13,7 +13,7 @@ function page(memory=initial()){
     crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,console:{error(){}},uid:()=>prefix+(++id),
     localStorage:{getItem:()=>null,setItem(){}},document:{addEventListener(){}},addEventListener(){},window:{},$:()=>null,
     kAlert:message=>alerts.push(message),blankState:()=>({name:'Blank',areas:[],tenants:[],mlas:[]}),calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),num:Number,mKey:()=>'',
-    recalc(){},renderKPI(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',setMode(){},shared:memory,index:clone(memory.get('pw_index')),
+    recalc(){},renderKPI(){},basisRenderContext(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',setMode(){},shared:memory,index:clone(memory.get('pw_index')),
     offerFile:async(name,data)=>{downloads.push({name,data});return 'saved';}});
   for(const file of ['scenario_settings.js','native_codec.js'])vm.runInContext(fs.readFileSync(path.join(root,'src',file),'utf8'),c);
   vm.runInContext(workspace,c);vm.runInContext(fs.readFileSync(path.join(root,'src/native_ui.js'),'utf8'),c);

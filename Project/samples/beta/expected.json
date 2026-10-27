@@ -1,0 +1,8 @@
+{
+  "purpose": "Synthetic manual beta acceptance; not a general underwriting benchmark",
+  "analysis": {"startYear": 2026, "startMonth": 4, "years": 2, "areaSF": 1000},
+  "assumptions": {"annualRent": 12125, "annualOperatingCosts": 2400, "growth": 0, "generalVacancy": 0, "creditLoss": 0, "debt": false, "recoveries": 0},
+  "expected": {"year1Rent": 12125, "year2Rent": 12125, "year1NOI": 9725, "year2NOI": 9725, "monthlyRent": 1010.4166666666666, "monthlyOperatingCosts": 200, "monthlyNOI": 810.4166666666666},
+  "absoluteTolerance": 0.000001,
+  "calculation": "Annual NOI = 12125 - 2400 = 9725. Monthly values = annual values / 12. Display rounding does not change stored values."
+}

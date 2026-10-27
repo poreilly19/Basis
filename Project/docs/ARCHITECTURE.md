@@ -1,4 +1,4 @@
-# Architecture — 0.7.9
+# Architecture — 0.7.25
 
 `app/index.html` is the deployable single-file application. Its presentation,
 legacy interchange adapters, workspace orchestration and optional host integration
@@ -6,6 +6,13 @@ remain in the HTML. Several marked regions now come from canonical source files:
 
 | Source | Responsibility |
 | --- | --- |
+| `src/intake_reconciliation.js` | Per-document date/period arithmetic checks, strict financial-line normalization and Document Totals review. |
+| `src/navigation_ui.js` | Desktop section/page/property tabs, responsive modal navigation, scoped property/context selection, summary and header-metric visibility. |
+| `src/workflow_ui.js` | Lease drawer lifecycle, phone tenant cards, property-scoped tenant filters/bulk actions, in-place AI setup and import comparison from the Apply candidate. |
+| `src/tenant_groups.js` | Legacy/multiple memberships and validated atomic batch classification changes. |
+| `src/workspace_preferences.js` | Validated browser preferences and legacy theme migration, separate from model data. |
+| `src/workspace_settings_ui.js` | Settings UI, theme/autosave hooks and column sizing. |
+| `src/ai_provider.js` | Memory-only keys, fixed provider transports, cancellation and request/response budgets. |
 | `src/financial_engine.js` | Property/portfolio calculations, model factories and financial helpers. See [ENGINE.md](ENGINE.md). |
 | `src/native_codec.js` | Native ZIP/JSON integrity, migration and structural model validation. |
 | `src/native_ui.js` | Native save/open adapters into the workspace. |
@@ -103,3 +110,42 @@ from the HTML, and move remaining expensive synchronous paths behind explicit
 worker requests. Preserve golden comparisons and input/output compatibility as
 those boundaries change. Host-side atomic revision checks and remote snapshot
 recovery/pruning still require a documented backend contract.
+
+
+## Guided workflows (0.7.18)
+
+`src/guided_ui.js` owns setup, contextual navigation, save/export presentation,
+selection actions and local report shortcuts. `src/model_checks.js` renders
+structured validation targets and routes back to input controls. `src/intake_review.js`
+applies reviewed tenant decisions to a copied model and supplies correction/source
+views. The existing intake mapper in `app/index.html` supplies the same prepared
+model to preview and Apply. Review state is session-only and outside model files;
+accepted values and their source log are stored normally.
+
+There are 26 canonical application modules plus the four-source inert worker
+bundle. The financial engine is unchanged outside `validateModel`; its optional
+third callback supplies UI targets without altering legacy finding objects.
+The remaining embedded UI/import code is still a maintenance boundary to extract
+behind the existing regression fixtures. The standard-library launcher serves
+only the `app` folder on IPv4 loopback, with a content fingerprint for safe reuse
+of an already-running instance of the same release.
+
+`src/intake_quality.js` owns extraction evidence binding, strict rent normalization,
+conservative tenant grouping and reviewed Apply To targets. Both preview and Apply
+use its target checks. Provider responses remain proposals; no model changes occur
+until Apply validates the candidate. Field citations retain the local upload ID
+and an explicit text-match status, without treating that status as semantic proof.
+
+`src/intake_amendments.js` combines explicit rent/recovery changes with supported
+base terms on the candidate model. It returns review blockers for unsupported
+scope, chronology or timing. Preview renders the blockers; Apply enforces them
+before any live model replacement or new-property save. The same module retains
+combined source evidence and bounds generated schedules. It does not change the
+financial engine or establish contractual priority.
+
+The 0.7.25 portfolio presentation restores the supplied reference ribbon and
+Navigator in `app/index.html`. It reuses the corrected atomic workspace actions
+and `pwExplorer` grid; it does not import historical persistence or engine code.
+Ribbon action errors are surfaced, pop-up menus clean up their handlers and
+report opening checks its load/context before entering Reports. Settings and
+Document Import remain secondary pages. See `RIBBON_0_7_25.md` for the action map.

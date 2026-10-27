@@ -60,7 +60,7 @@ function page(shared,index=shared.data.get('pw_index')){
     crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,btoa,atob,console:{error(){}},uid:()=>prefix+(++id),
     localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},document:{addEventListener(){}},addEventListener(){},
     window:{},$:()=>null,kAlert:message=>alerts.push(message),kConfirm:async()=>true,blankState:()=>({name:'Blank',areas:[],tenants:[],mlas:[]}),
-    calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),mKey:()=>'',num:value=>Number.isFinite(Number(value))?Number(value):0,recalc(){},renderKPI(){},drawPane(){},
+    calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),mKey:()=>'',num:value=>Number.isFinite(Number(value))?Number(value):0,recalc(){},renderKPI(){},basisRenderContext(){},drawPane(){},
     PANES:{},T1:'property',MODE:'inputs',sampleState:()=>({name:'Sample'}),setMode(){},idb:shared.connection(),initial:clone(index),initialModels:clone(models)});
   for(const file of ['scenario_settings.js','native_codec.js'])vm.runInContext(fs.readFileSync(path.join(root,'src',file),'utf8'),c);
   vm.runInContext(workspace,c);const run=source=>vm.runInContext(source,c);

@@ -58,7 +58,7 @@ class LegacyFileBrowserTests(unittest.TestCase):
             fixture['destination']['pf'])
         self.page.locator('.pwhead').get_by_label('Scenario', exact=True).select_option(
             fixture['destination']['sc'])
-        self.page.get_by_role('button', name='Destination active', exact=True).click()
+        self.page.locator('.basis-workspace-main').get_by_role('button', name='Destination active', exact=True).click()
         self.page.wait_for_function('id => PW.cur===id', arg=fixture['destination']['property'])
         self.page.evaluate('''() => {
           S.name='Destination edited while the file reads';
@@ -90,8 +90,9 @@ class LegacyFileBrowserTests(unittest.TestCase):
             });
           };
         }''', {'name': name, 'method': 'arrayBuffer' if native else 'text'})
+        support.open_import_menu(self.page)
         with self.page.expect_file_chooser() as chooser:
-            self.page.get_by_role('button', name='Import model', exact=True).click()
+            self.page.get_by_role('menuitem', name='Basis property or portfolio file…', exact=True).click()
         chooser.value.set_files({'name': name,
                                 'mimeType': 'application/zip' if native else 'application/json',
                                 'buffer': data})

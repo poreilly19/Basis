@@ -56,7 +56,7 @@ function setup() {
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'src/financial_engine.js'), 'utf8') + '\n' +
     fs.readFileSync(path.join(root, 'src/native_codec.js'), 'utf8'), context, {timeout: 5000});
-  vm.runInContext(stateSource + '\n' + mappingSource + '\n' + lifecycleSource, context, {timeout: 5000});
+  vm.runInContext(fs.readFileSync(path.join(root,'src/intake_reconciliation.js'),'utf8') + '\n' + fs.readFileSync(path.join(root,'src/intake_amendments.js'),'utf8') + '\n' + fs.readFileSync(path.join(root,'src/intake_quality.js'),'utf8') + '\n' + stateSource + '\n' + mappingSource + '\n' + lifecycleSource, context, {timeout: 5000});
   run = source => vm.runInContext(source, context, {timeout: 5000});
   run(`S=blankState();Object.assign(S,{name:'Active property',startYear:2026,startMonth:1,years:2});
     S.areas=[{id:'building',name:'Building',sf:1000,basis:true}];S.tenants=[];S.ops=[];`);
@@ -224,6 +224,21 @@ test('failed apply validation rolls back all staged rows, source logs and live o
     assert.equal(f.dirty, 0);
     assert.equal(f.adoptions.length, 0);
   }
+});
+test('selected going-in cap is previewed, applied and logged with independent price arithmetic', async () => {
+  const f=setup();f.run('S.gvRate=0;S.clRate=0;S.ops=[];S.priceMode="cap";S.goingInCap=0.06');
+  f.handlers.json=()=>Promise.resolve({...response(),valuation:{goingInCap:0.08}});
+  await f.run('intExtract()');
+  const before=f.run('JSON.stringify(S)');
+  assert.equal(f.run('intPrepareApply(S,INT.x,{...INT.pick,"v:goingInCap":false},"merge").model.goingInCap'),0.06);
+  assert.equal(f.run('intPrepareApply(S,INT.x,INT.pick,"merge").model.goingInCap'),0.08);
+  assert.equal(f.run('JSON.stringify(S)'),before);
+  assert.equal(await f.run('intApplySelected()'),true);
+  // Fixture: 1,000 SF at $12/SF/year, no expenses/vacancy/credit loss.
+  // Independent cap-price identity: $12,000 annual NOI / 8% = $150,000.
+  assert.equal(f.run('calc(S).noiY1'),12000);
+  assert.equal(f.run('calc(S).price'),150000);
+  assert.equal(f.run('S.srcLog.find(x=>x.target==="Valuation · going-in cap").value'),'8.00%');
 });
 
 test('apply confirmation rechecks model and selected inputs and blocks duplicate apply', async () => {

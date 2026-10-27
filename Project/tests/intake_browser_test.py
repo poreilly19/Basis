@@ -50,7 +50,9 @@ class IntakeBrowserTests(unittest.TestCase):
         self.page.evaluate('intExtract()')
         before = self.page.evaluate('JSON.stringify(S)')
         self.page.evaluate('window.confirm=()=>true')
-        self.page.get_by_role('button', name='Apply selected', exact=True).click()
+        self.assertTrue(self.page.get_by_role('button', name='Apply selected', exact=True).is_disabled())
+        # Preview blocks invalid input; the underlying apply path must also reject it.
+        self.assertFalse(self.page.evaluate('intApplySelected()'))
         self.page.wait_for_function('!INT.applying && !!INT.err')
         self.assertEqual(self.page.evaluate('JSON.stringify(S)'), before)
         self.assertIn('years', self.page.evaluate('INT.err').lower())

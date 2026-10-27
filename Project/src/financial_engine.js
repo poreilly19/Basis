@@ -944,8 +944,12 @@ function calc(S){
         // "Use Monthly Occupancy for Gross Up" (Basis default on; ARGUS's off uses the year's average).
         // A gross-up lifts the variable expense to the stated occupancy; it never reduces an actual one.
         const oc=(S.guMonthly===false)?occAY(Math.floor(i/12)):occRate[i];
-        const guF=Math.max(1,Math.min(gu/Math.max(oc,0.10), 1/Math.max(oc,0.10)));
-        p+=(b*fx + b*(1-fx)*occRate[i]*guF)*rp;
+        const guF=oc>0?Math.max(1,Math.min(gu/oc,1/oc)):1;
+        // Do not substitute 10% occupancy: that understates the selected gross-up
+        // during early lease-up. Ratio-first arithmetic also handles tiny shares.
+        const variable=Number.isFinite(guF)?b*(1-fx)*occRate[i]*guF
+          :b*(1-fx)*(occRate[i]/oc)*Math.min(gu,1);
+        p+=(b*fx + variable)*rp;
       }
       poolFix.set(k,p); }
     for(const [L,rp] of pl) p+=L.m[i]*rp;
@@ -1268,7 +1272,7 @@ function calc(S){
   const irrM=irrMonthlyF, annu=m=>annuF(S,m), irrAnnual=irrAnnualF;   // the levered IRR below uses the same three
   let irrU=irrFrom(S,pvM,pvA,netRev,nY,basis,closing);
   let irrL=null;
-  if(S.loanOn&&D.loans.length&&(loan>0||D.fundM.some(v=>v))){
+  if(S.loanOn&&D.loans.length&&(loan>0||D.fundM.some((v,i)=>i<nY*12&&v)||D.drawM.some((v,i)=>i<nY*12&&v))){
     equity=basis+closing-loan+feeAmt;
     const lf=[-equity]; for(let i=0;i<nY*12;i++) lf.push(cfbds[i]-dsM[i]+D.drawM[i]-D.balloonM[i]+D.fundM[i]);
     lf[lf.length-1]+=netRev-balEnd;
@@ -1433,31 +1437,37 @@ function scrubMetrics(S,R){
    re-letting at $0.00/SF, NOI going to zero mid-hold and a reversion of $0 — a model
    that produces a number the pipeline would happily carry into a BOV. Severity is
    about whether the output can be trusted, not about tidiness. */
-function validateModel(S,R){
-  const F=[], E=(a,m,d)=>F.push({sev:"error",area:a,msg:m,detail:d||""});
-  const W=(a,m,d)=>F.push({sev:"warn",area:a,msg:m,detail:d||""});
-  const I=(a,m,d)=>F.push({sev:"info",area:a,msg:m,detail:d||""});
+function validateModel(S,R,onIssue){
+  // Optional UI metadata: the original findings and all financial calculations stay unchanged.
+  const F=[],add=(sev,area,msg,detail,target)=>{const issue={sev,area,msg,detail:detail||""};F.push(issue);if(onIssue)onIssue(issue,target||null);};
+  const E=(a,m,d,t)=>add("error",a,m,d,t),W=(a,m,d,t)=>add("warn",a,m,d,t),I=(a,m,d,t)=>add("info",a,m,d,t);
+  const T=(collection,record,field)=>({collection,record:record?.id||null,field});
   if(!R){ E("Engine","The model does not calculate","Fix the inputs before reading any output."); return F; }
-  const sf=R.sf, nY=R.nY, A=R.ann;
+  const sf=R.sf, nY=R.nY, A=R.ann,spacesByTenant=new Map(),spacesByName=new Map();
+  for(const space of R.spaces){if(!spacesByTenant.has(space.tid))spacesByTenant.set(space.tid,space);if(!spacesByName.has(space.srcName))spacesByName.set(space.srcName,space);}
+  if(num(S.years)>40)E("Analysis","Analysis length exceeds the supported 40-year projection", "The model retains "+S.years+" entered years, but cash flows and valuation use 40 years. Set a supported hold before relying on results.",T("property",S,"years"));
+  const valuationDate=pD(S.valDate);
+  if(S.valDays&&valuationDate&&(valuationDate.y!==num(S.startYear)||valuationDate.m!==(num(S.startMonth)||1)))
+    E("Valuation","Valuation date is outside the analysis start month","The day adjustment applies within the first analysis month; it does not move the cash flows to another month. Choose a date in "+mKey(num(S.startYear),num(S.startMonth)||1)+" or review the analysis start.",T("property",S,"valDate"));
   const rollSF=(S.tenants||[]).reduce((a,t)=>a+num(t.sf),0);
 
   /* --- area --- */
   const basis=(S.areas||[]).find(a=>a.basis)||(S.areas||[])[0];
   if(!basis||num(basis.sf)<=0)
-    E("Area","Rentable area is zero","Every per-SF figure, pro-rata recovery share and gross-up is meaningless until this is set.");
+    E("Area","Rentable area is zero","Every per-SF figure, pro-rata recovery share and gross-up is meaningless until this is set.", T("areas",basis,"sf"));
   else if(rollSF>0&&Math.abs(rollSF-sf)/sf>0.02){
     const reab=(S.tenants||[]).filter(t=>(t.expiry==="Reabsorb")).reduce((a,t)=>a+num(t.sf),0);
     const resid=rollSF-reab-sf;
     if(reab>0&&Math.abs(resid)/sf<=0.02)
       I("Area","Rent roll is "+f0.format(rollSF)+" SF, "+f0.format(reab)+" SF of it reabsorbed",
-        "Expected: a reabsorbed lease and the lease that takes its space both sit on the roll, so the total exceeds rentable area by design.");
+        "Expected: a reabsorbed lease and the lease that takes its space both sit on the roll, so the total exceeds rentable area by design.", T("areas",basis,"sf"));
     else
       W("Area","Rent roll is "+f0.format(rollSF)+" SF against "+f0.format(sf)+" SF rentable",
         "A gap of "+f0.format(resid)+" SF after allowing for "+f0.format(reab)+
-        " SF of reabsorbed leases. Recovery shares use the rentable basis, so this moves reimbursements.");
+        " SF of reabsorbed leases. Recovery shares use the rentable basis, so this moves reimbursements.", T("areas",basis,"sf"));
   }
   if((S.areas||[]).filter(a=>num(a.sf)>0).length===0&&(S.areas||[]).length>1)
-    W("Area","No area measure carries a value","");
+    W("Area","No area measure carries a value","", T("areas",basis,"sf"));
 
   /* --- inflation --- */
   const live=(S.infl||[]).filter(x=>x.id!=="none");
@@ -1466,7 +1476,7 @@ function validateModel(S,R){
     E("Inflation","Every inflation series is zero","Rents, expenses and market rates are flat for the whole hold. If that is deliberate, say so in the BOV; if not, the value is understated.");
   else {
     for(const x of live) if(!(x.rates||[]).some(r=>num(r)!==0))
-      I("Inflation","Series \u201c"+x.name+"\u201d is zero throughout","");
+      I("Inflation","Series \u201c"+x.name+"\u201d is zero throughout","", T("infl",x,"rates"));
   }
 
   /* --- expenses --- */
@@ -1487,31 +1497,31 @@ function validateModel(S,R){
     const M=resolveMLA(m,S);
     if(M.mktNew<=0)
       E("Market leasing","Profile \u201c"+m.name+"\u201d re-lets at $0.00/SF",
-        "Every space on this profile earns nothing after its lease expires.");
+        "Every space on this profile earns nothing after its lease expires.", T("mlas",m,"mrNewLocal"));
     if(M.renewProb>=1&&M.downtime===0)
-      W("Market leasing","Profile \u201c"+m.name+"\u201d has 100% renewal and no downtime","No rollover friction is modelled.");
+      W("Market leasing","Profile \u201c"+m.name+"\u201d has 100% renewal and no downtime","No rollover friction is modelled.", T("mlas",m,"renewProb"));
     if(M.tiNew===0&&M.tiRenew===0&&M.lcNew===0&&M.lcRenew===0)
-      W("Market leasing","Profile \u201c"+m.name+"\u201d carries no TI or leasing commissions","Rollover is free, which overstates cash flow.");
+      W("Market leasing","Profile \u201c"+m.name+"\u201d carries no TI or leasing commissions","Rollover is free, which overstates cash flow.", T("mlas",m,"tiRef"));
     if(M.termYears*12+num(m.termMonths)<=0)
-      E("Market leasing","Profile \u201c"+m.name+"\u201d has a zero term","");
+      E("Market leasing","Profile \u201c"+m.name+"\u201d has a zero term","", T("mlas",m,"termYears"));
   }
   if(!(S.mlas||[]).length) E("Market leasing","No market leasing profile","");
 
   /* --- rent roll --- */
   for(const t of (S.tenants||[])){
     const nm=(t.name||"(unnamed)")+(t.suite?" ("+t.suite+")":"");
-    if(num(t.sf)<=0) W("Rent roll",nm+" has zero area","");
+    if(num(t.sf)<=0) W("Rent roll",nm+" has zero area","", T("tenants",t,"sf"));
     const a=sSer(t.start), b=eSer(leaseEnd(t));
-    if(a&&b&&b<a) E("Rent roll",nm+" ends before it starts","");
-    if(t.start&&t.rentBasis&&t.rentBasis!=="mkt"&&!RENT_ALIAS[t.rentBasis]&&!RENT_BASES.some(x=>x.v===t.rentBasis)) E("Rent roll",nm+": rent unit \""+t.rentBasis+"\" isn't recognized, so the lease earns no base rent","");
+    if(a&&b&&b<a) E("Rent roll",nm+" ends before it starts","", T("tenants",t,"end"));
+    if(t.start&&t.rentBasis&&t.rentBasis!=="mkt"&&!RENT_ALIAS[t.rentBasis]&&!RENT_BASES.some(x=>x.v===t.rentBasis)) E("Rent roll",nm+": rent unit \""+t.rentBasis+"\" isn't recognized, so the lease earns no base rent","", T("tenants",t,"rentBasis"));
     if(t.start&&leaseEnd(t)){
-      const sp=R.spaces.find(x=>x.tid===t.id)||R.spaces.find(x=>x.srcName===(t.name||""));
+      const sp=spacesByTenant.get(t.id)||spacesByName.get(t.name||"");
       if(sp){
         let r12=0; for(let k=0;k<Math.min(12,R.nM);k++) r12+=sp.rent[k]||0;
         let rAll=0; for(let k=0;k<R.nM;k++) rAll+=sp.rent[k]||0;
         if(rAll<=0) W("Rent roll",nm+" earns no rent across the whole hold",
-          num(t.sf)>0?f0.format(num(t.sf))+" SF ("+(100*num(t.sf)/Math.max(rollSF,1)).toFixed(0)+"% of the roll)":"");
-        else if(r12<=0) I("Rent roll",nm+" earns no rent in year 1","");
+          num(t.sf)>0?f0.format(num(t.sf))+" SF ("+(100*num(t.sf)/Math.max(rollSF,1)).toFixed(0)+"% of the roll)":"", T("tenants",t,"rent"));
+        else if(r12<=0) I("Rent roll",nm+" earns no rent in year 1","", T("tenants",t,"rent"));
       }
     }
     const rec=byId(S.recs,t.rec);
@@ -1519,11 +1529,11 @@ function validateModel(S,R){
       const pool=(S.ops||[]).filter(o=>recovOf(o)>0&&(!rec.pool||o.group===rec.pool||(o.groups||[]).includes(rec.pool)));
       if(!pool.length||!pool.some(o=>num(o.amt)>0))
         W("Recoveries",nm+" is on a base year stop with nothing in the pool",
-          "The stop has no expenses to measure against, so it recovers zero.");
+          "The stop has no expenses to measure against, so it recovers zero.", T("tenants",t,"rec"));
     }
     if(rec&&rec.method==="NNN"){
       const pool=(S.ops||[]).filter(o=>recovOf(o)>0&&(!rec.pool||o.group===rec.pool||(o.groups||[]).includes(rec.pool)));
-      if(!pool.length) W("Recoveries",nm+" is NNN pro-rata with an empty pool","");
+      if(!pool.length) W("Recoveries",nm+" is NNN pro-rata with an empty pool","", T("tenants",t,"rec"));
     }
   }
   if(!(S.tenants||[]).length) E("Rent roll","No tenants or vacant space entered","");
@@ -1539,10 +1549,10 @@ function validateModel(S,R){
   for(const t of (S.tenants||[])){
     const nm=(t.name||"(unnamed)")+(t.suite?" ("+t.suite+")":"");
     if(!byId(S.mlas,t.mla))
-      E("Rent roll",nm+" has no market leasing profile","Nothing governs what happens when the lease rolls.");
+      E("Rent roll",nm+" has no market leasing profile","Nothing governs what happens when the lease rolls.", T("tenants",t,"mla"));
     if(t.expiry==="Renew")
       I("Rent roll",nm+" is set to contract renewal",
-        "A contract option runs at 100% renewal probability, so use it only where renewal is close to certain.");
+        "A contract option runs at 100% renewal probability, so use it only where renewal is close to certain.", T("tenants",t,"expiry"));
   }
   // only spec leases entered with dates: undated vacant space rolls on its MLA and
   // picks up the new-deal TI and LC through the rollover automatically
@@ -1551,11 +1561,11 @@ function validateModel(S,R){
   if(specNoCost.length)
     W("Rent roll",specNoCost.length+" speculative lease"+(specNoCost.length>1?"s carry":" carries")+
       " no TI or leasing commission",
-      specNoCost.map(t=>t.name).join(", ")+". Spec space normally picks up the profile's new-deal TI and LC.");
+      specNoCost.map(t=>t.name).join(", ")+". Spec space normally picks up the profile's new-deal TI and LC.", T("tenants",specNoCost[0],"tiBasis"));
   for(const o of (S.ops||[]))
     if(/tenant\s*elec/i.test(o.name||"")&&num(o.fixedPct)>0&&!isPctBasis(o.basis))
       W("Expenses","Tenant electric is "+pc(num(o.fixedPct),0)+" fixed",
-        "It moves entirely with occupancy, so it is normally fixed at 0%. Recovered net, it should wash to roughly zero.");
+        "It moves entirely with occupancy, so it is normally fixed at 0%. Recovered net, it should wash to roughly zero.", T("ops",o,"fixedPct"));
   const sc=scrubMetrics(S,R);
   if(sc&&sc.hasRET){
     if(sc.retJump>2.5)
@@ -1573,18 +1583,18 @@ function validateModel(S,R){
     const nm=(t.name||"(unnamed)")+(t.suite?" ("+t.suite+")":"");
     if((t.expiry==="Option"||t.expiry==="ContractRenewal"))
       I("Rent roll",nm+" renews on an option at 100% probability",
-        "Appropriate for a below-market right the tenant will almost certainly exercise; otherwise the blended MLA is the safer assumption.");
+        "Appropriate for a below-market right the tenant will almost certainly exercise; otherwise the blended MLA is the safer assumption.", T("tenants",t,"expiry"));
     if(t.expiry==="MTM"&&!t.mtmEnd)
-      I("Rent roll",nm+" is month to month through the whole analysis","It never rolls to market, so its rent never resets.");
+      I("Rent roll",nm+" is month to month through the whole analysis","It never rolls to market, so its rent never resets.", T("tenants",t,"mtmEnd"));
     if(t.breakOn){
       const bE=t.breakDate?eSer(t.breakDate):null, tE=eSer(leaseEnd(t));
-      if(bE===null) W("Rent roll",nm+" has a termination option with no effective date","It is being ignored.");
-      else if(tE!==null&&bE>=tE) W("Rent roll",nm+"'s termination date is on or after expiry","It has no effect.");
-      if(!num(t.breakProb)) I("Rent roll",nm+" has a termination option at 0% probability","It is recorded but does not change the cash flow.");
+      if(bE===null) W("Rent roll",nm+" has a termination option with no effective date","It is being ignored.", T("tenants",t,"breakDate"));
+      else if(tE!==null&&bE>=tE) W("Rent roll",nm+"'s termination date is on or after expiry","It has no effect.", T("tenants",t,"breakDate"));
+      if(!num(t.breakProb)) I("Rent roll",nm+" has a termination option at 0% probability","It is recorded but does not change the cash flow.", T("tenants",t,"breakProb"));
     }
-    if(t.prOn&&!num(t.prRate)) W("Rent roll",nm+" has percentage rent switched on with no rate","");
+    if(t.prOn&&!num(t.prRate)) W("Rent roll",nm+" has percentage rent switched on with no rate","", T("tenants",t,"prRate"));
     if(t.termMode==="term"&&!(num(t.termYears)||num(t.termMonths)))
-      E("Rent roll",nm+" is set to a term length of zero","The lease has no expiry.");
+      E("Rent roll",nm+" is set to a term length of zero","The lease has no expiry.", T("tenants",t,"termYears"));
   }
 
   /* --- leased fee / leasehold --- */
@@ -1602,7 +1612,7 @@ function validateModel(S,R){
       const P=S.pos||{};
       if(P.resetOn&&!num(P.resetCapStep)&&!num(P.resetCapNOI))
         W("Ground lease","The FMV reset is uncapped",
-          "An unprotected reset is the clause that cost Lever House its leasehold. Model the cap, or show the exposure deliberately.");
+          "An unprotected reset is the clause that cost Lever House its leasehold. Model the cap, or show the exposure deliberately.", T("position",S.pos,"resetCapStep"));
       if(P.resetOn&&num(P.resetEvery)>0){
         const nxt=X.events.find(e=>e.yr>S.startYear+nY-1);
         const last=X.events.length?X.events[X.events.length-1].yr:null;
@@ -1612,7 +1622,7 @@ function validateModel(S,R){
       }
       if(num((S.pos||{}).lhCapPrem)<=0)
         I("Ground lease","The leasehold exit cap carries no premium",
-          "The training expects 25 to 50 basis points wide of fee simple for the added risk.");
+          "The training expects 25 to 50 basis points wide of fee simple for the added risk.", T("position",S.pos,"lhCapPrem"));
     }
   }
 
@@ -1642,8 +1652,8 @@ function validateModel(S,R){
   for(let y=0;y<nY;y++) if(A.occ[y]<0.001){
     W("Occupancy","Occupancy is zero in "+(S.startYear+y),"The building is entirely dark that year."); break; }
   if(R.pv<=0) E("Valuation","Present value is zero or negative","");
-  if(num(S.discount)<=0) W("Valuation","Discount rate is zero","");
-  if(num(S.exitCap)<=0) W("Valuation","Exit cap is zero","No reversion can be struck.");
+  if(num(S.discount)<=0) W("Valuation","Discount rate is zero","", T("property",S,"discount"));
+  if(num(S.exitCap)<=0) W("Valuation","Exit cap is zero","No reversion can be struck.", T("property",S,"exitCap"));
   return F;
 }
 
@@ -2056,7 +2066,7 @@ function valAt(R,S,o){
     const D=(o.price===undefined&&R.loans)?{initLoan:R.loan,initFee:R.feeAmt,dsM:R.dsM,drawM:R.drawM,balloonM:R.balloonM,fundM:R.fundM,loans:R.loans,payoff:R.payoff}
       :buildDebt(S,R.nM,R.nY,basis,R.leasingM);
     loan=D.initLoan;
-    if(D.loans.length&&(loan>0||D.fundM.some(v=>v))){ equity=cost-loan+D.initFee;
+    if(D.loans.length&&(loan>0||D.fundM.some((v,i)=>i<h*12&&v)||D.drawM.some((v,i)=>i<h*12&&v))){ equity=cost-loan+D.initFee;
       const lf=[-equity]; for(let i=0;i<h*12;i++) lf.push(R.cfbds[i]-D.dsM[i]+D.drawM[i]-D.balloonM[i]+D.fundM[i]);
       bal=D.payoff(h*12-1); lf[lf.length-1]+=net-bal; irrL=annu(irrMo(lf));
       const dist=lf.slice(1).reduce((a,v)=>a+v,0); multL=equity>0?dist/equity:null; }

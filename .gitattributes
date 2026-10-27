@@ -1,0 +1,6 @@
+# Preserve the verified release bytes on every platform, including Windows.
+# The app embeds exact module sources and deployment checks use byte hashes.
+* -text
+
+# The Windows launcher intentionally uses CRLF line endings.
+*.cmd whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

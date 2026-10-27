@@ -18,6 +18,21 @@ if(occurrences(workerStart)||occurrences(workerEnd)){
   html=html.slice(0,start)+html.slice(end+workerEnd.length);
 }
 const regions = [
+  ['beta_ui.js','/* BEGIN BASIS BETA UI */','/* END BASIS BETA UI */','const studioBtn='],
+  ['report_export.js','/* BEGIN BASIS REPORT EXPORT */','/* END BASIS REPORT EXPORT */','/* Basis report tables:'],
+  ['intake_reconciliation.js','/* BEGIN BASIS INTAKE RECONCILIATION */','/* END BASIS INTAKE RECONCILIATION */','const studioBtn='],
+  ['intake_amendments.js','/* BEGIN BASIS INTAKE AMENDMENTS */','/* END BASIS INTAKE AMENDMENTS */','const studioBtn='],
+  ['intake_quality.js','/* BEGIN BASIS INTAKE QUALITY */','/* END BASIS INTAKE QUALITY */','const studioBtn='],
+  ['intake_review.js','/* BEGIN BASIS INTAKE REVIEW */','/* END BASIS INTAKE REVIEW */','const studioBtn='],
+  ['model_checks.js','/* BEGIN BASIS MODEL CHECKS */','/* END BASIS MODEL CHECKS */','const studioBtn='],
+  ['guided_ui.js','/* BEGIN BASIS GUIDED UI */','/* END BASIS GUIDED UI */','const studioBtn='],
+  ['number_inputs.js','/* BEGIN BASIS NUMBER INPUTS */','/* END BASIS NUMBER INPUTS */','function inp(o,k,p={})'],
+  ['navigation_ui.js','/* BEGIN BASIS NAVIGATION UI */','/* END BASIS NAVIGATION UI */','const studioBtn='],
+  ['workflow_ui.js','/* BEGIN BASIS WORKFLOW UI */','/* END BASIS WORKFLOW UI */','const studioBtn='],
+  ['tenant_groups.js','/* BEGIN BASIS TENANT GROUPS */','/* END BASIS TENANT GROUPS */','/* =========================== PROPERTY FILE'],
+  ['workspace_preferences.js','/* BEGIN BASIS WORKSPACE PREFERENCES V1 */','/* END BASIS WORKSPACE PREFERENCES V1 */','/* Basis Studio workspace. Presentation only;'],
+  ['workspace_settings_ui.js','/* BEGIN BASIS WORKSPACE SETTINGS UI */','/* END BASIS WORKSPACE SETTINGS UI */','const studioBtn='],
+  ['ai_provider.js','/* BEGIN BASIS AI PROVIDER */','/* END BASIS AI PROVIDER */','const AI={text:'],
   ['financial_engine.js','/* BEGIN BASIS FINANCIAL ENGINE */','/* END BASIS FINANCIAL ENGINE */'],
   ['scenario_settings.js','/* BEGIN BASIS SCENARIO SETTINGS V1 */','/* END BASIS SCENARIO SETTINGS V1 */','/* BEGIN BASIS NATIVE ARCHIVE V1:'],
   ['native_codec.js','/* BEGIN BASIS NATIVE ARCHIVE V1:','/* END BASIS NATIVE ARCHIVE V1 */'],

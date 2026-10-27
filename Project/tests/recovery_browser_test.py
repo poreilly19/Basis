@@ -21,6 +21,7 @@ class RecoveryBrowserTests(unittest.TestCase):
 
     def open_recovery(self):
         self.page.evaluate('setMode("portfolio")')
+        support.open_library_actions(self.page)
         self.page.get_by_role('button', name='Recover drafts', exact=True).click()
         dialog = self.page.get_by_role('dialog', name='Recovery drafts', exact=True)
         expect(dialog).to_be_visible()
@@ -151,13 +152,14 @@ class RecoveryBrowserTests(unittest.TestCase):
                 self.page.evaluate('value=>{Date.now=()=>value;}', clock)
                 name = f'Unsaved edits at clock {clock}'
                 name_input = self.page.locator('#pane .f').filter(
-                    has=self.page.get_by_text('Property name', exact=True)).locator('input')
+                    has=self.page.get_by_text('Property Name', exact=True)).locator('input')
                 name_input.fill(name)
                 name_input.press('Tab')
                 self.assertEqual(self.page.evaluate('S.name'), name)
                 self.page.evaluate('''() => {
                   clearTimeout(PW.timer);PW.timer=null;setMode('portfolio');
                 }''')
+                support.open_library_actions(self.page)
                 self.page.get_by_role('button', name='Reload library', exact=True).click()
                 dialog = self.page.get_by_role('alertdialog')
                 expect(dialog).to_contain_text("discard this tab's unsaved edits")

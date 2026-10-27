@@ -55,8 +55,10 @@ class RuntimeXlsxSmokeTests(unittest.TestCase):
         result = self.page.evaluate('''async () => {
           const lib=await pfXlsxLib(),model=blankState();model.name='Café 東京';model.externalId='original-host';
           model.custom={flag:false,zero:0,small:1e-9};
+          model.tgroups=[{id:'a',name:'Industrial'},{id:'b',name:'Credit'}];
           model.tenants=[{id:'tenant',name:'A & B',sf:1234.5,start:'2026-01',end:'2030-12',rent:24.125,
-            rentBasis:'psfyr',step:0.03125,baseYear:'2024',sched:[{id:'step',date:'2027-01-15',amt:0.025,type:'step',units:'pct'}]}];
+            group:'a',groups:['a','b'],rentBasis:'psfyr',step:0.03125,baseYear:'2024',sched:[{id:'step',date:'2027-01-15',amt:0.025,type:'step',units:'pct'}]},
+            {id:'legacy',name:'Legacy',group:'a'},{id:'cleared',name:'Cleared',group:'',groups:[]}];
           const member=Object.assign(blankState(),{name:'Excluded member',externalId:'original-member'});
           model.portfolio=[{id:'member',name:'Member label',include:false,model:member}];
           const pkg=pfPackage(model,{results:false,members:true}),expected=pfUnpackJSON(JSON.parse(JSON.stringify(pkg.json)));
@@ -66,6 +68,10 @@ class RuntimeXlsxSmokeTests(unittest.TestCase):
         self.assertEqual(result['version'], '0.20.3')
         self.assertEqual(result['signature'], [80, 75, 3, 4])
         self.assertEqual(populated_inputs(result['actual']), populated_inputs(result['expected']))
+        tenants = result['actual'][0]['st']['tenants']
+        self.assertEqual(tenants[0]['groups'], ['a', 'b'])
+        self.assertNotIn('groups', tenants[1])
+        self.assertEqual(tenants[2]['groups'], [])
         self.assertEqual(result['check'], 'match')
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(self.blocked, [])

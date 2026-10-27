@@ -1,5 +1,9 @@
 # Transactional library actions
 
+Use the **Portfolio → Home** ribbon for new/copy/move/delete and scenario actions.
+Select properties in the grid first. **Portfolio → File** contains Reload Library,
+Recover Drafts and Export / Backup.
+
 Property adoption, copying, scenario creation, portfolio creation, renaming,
 moving, inclusion changes, recalculation and deletion prepare a separate index
 before saving. New model records and all required model payloads are submitted

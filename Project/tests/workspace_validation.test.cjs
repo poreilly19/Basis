@@ -38,7 +38,7 @@ function fixture(kind='memory'){
     crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,btoa,atob,uid:()=>prefix+(++sequence),console:{error(){}},
     localStorage:{getItem:key=>local.get(key)||null,setItem:(key,value)=>local.set(key,value)},document:{addEventListener(){}},addEventListener(){},window:{},$:()=>null,
     kAlert:message=>alerts.push(message),kConfirm:async()=>true,blankState:()=>model('Blank'),calc:()=>({sf:100,pv:1000,ann:{noi:[60]}}),mKey:()=>'',num:Number,
-    recalc(){},renderKPI(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',sampleState:()=>model('Sample'),setMode(){},initial:clone(initial),memory,idb:database.connection(),
+    recalc(){},renderKPI(){},basisRenderContext(){},drawPane(){},PANES:{},T1:'property',MODE:'inputs',sampleState:()=>model('Sample'),setMode(){},initial:clone(initial),memory,idb:database.connection(),
     host:{doc:fullPath=>{const key=fullPath.split('/').pop();return {get:async()=>({exists:remote.has(key),data:()=>clone(remote.get(key))}),set:async value=>{writes.push(['put',key]);remote.set(key,clone(value));},delete:async()=>{writes.push(['delete',key]);remote.delete(key);}};}}
   });
   for(const file of ['scenario_settings.js','native_codec.js'])vm.runInContext(fs.readFileSync(path.join(root,'src',file),'utf8'),c);

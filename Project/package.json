@@ -1,15 +1,20 @@
 {
   "name": "basis-cre-workspace",
-  "version": "0.7.9",
+  "version": "0.7.27",
   "private": true,
   "description": "Basis Studio browser underwriting app and open .basiscre native format (pre-release)",
   "scripts": {
-    "test": "node tests/native.test.cjs && node tests/workspace.test.cjs && node tests/concurrency.test.cjs && node tests/financial.test.cjs && node tests/engine_parity.test.cjs && node tests/portfolio.test.cjs && node tests/recovery.test.cjs && node tests/recovery_store.test.cjs && node tests/scenario_settings.test.cjs && node tests/scenario_workspace.test.cjs && node tests/worker_protocol.test.cjs && node tests/calculation_client.test.cjs && node tests/legacy.test.cjs && node tests/office_zip.test.cjs && node tests/exports.test.cjs && node tests/sensitivity_ui.test.cjs && node tests/library_actions.test.cjs && node tests/portfolio_export.test.cjs && node tests/import_readers.test.cjs && node tests/intake_lifecycle.test.cjs && node tests/pdf_integrity.test.cjs && node tests/pdf_loader.test.cjs && node tests/pdf_reading.test.cjs && node tests/image_safety.test.cjs && node tests/workspace_validation.test.cjs && node tests/init_lifecycle.test.cjs && node tests/xlsx_loader.test.cjs && node tests/legacy_import_lifecycle.test.cjs && node tests/office_xml.test.cjs && node tests/custom_workbook_cells.test.cjs && node tests/workbook_formula.test.cjs && node tests/python_launcher.test.cjs && node tests/check-build.cjs",
+    "test": "node tests/native.test.cjs && node tests/workspace.test.cjs && node tests/concurrency.test.cjs && node tests/financial.test.cjs && node tests/advanced_financial.test.cjs && node tests/engine_parity.test.cjs && node tests/portfolio.test.cjs && node tests/recovery.test.cjs && node tests/recovery_store.test.cjs && node tests/scenario_settings.test.cjs && node tests/scenario_workspace.test.cjs && node tests/worker_protocol.test.cjs && node tests/calculation_client.test.cjs && node tests/tenant_groups.test.cjs && node tests/legacy.test.cjs && node tests/office_zip.test.cjs && node tests/exports.test.cjs && node tests/report_export.test.cjs && node tests/build_beta.test.cjs && node tests/verify_beta.test.cjs && node deploy/cloudflare/check-access.test.cjs && node tests/sensitivity_ui.test.cjs && node tests/library_actions.test.cjs && node tests/portfolio_export.test.cjs && node tests/import_readers.test.cjs && node tests/intake_lifecycle.test.cjs && node tests/pdf_integrity.test.cjs && node tests/pdf_loader.test.cjs && node tests/pdf_reading.test.cjs && node tests/image_safety.test.cjs && node tests/workspace_validation.test.cjs && node tests/init_lifecycle.test.cjs && node tests/xlsx_loader.test.cjs && node tests/legacy_import_lifecycle.test.cjs && node tests/office_xml.test.cjs && node tests/custom_workbook_cells.test.cjs && node tests/workbook_formula.test.cjs && node tests/python_launcher.test.cjs && node tests/workspace_preferences.test.cjs && node tests/ai_provider.test.cjs && node tests/number_inputs.test.cjs && node tests/guided_model.test.cjs && node tests/intake_accuracy.test.cjs && node tests/intake_quality.test.cjs && node tests/intake_amendments.test.cjs && node tests/intake_reconciliation.test.cjs && node tests/check-build.cjs",
     "build": "node scripts/sync-native.cjs",
     "test:browser": "node scripts/run-python.cjs -m unittest discover -s tests -p \"*browser_test.py\" -v",
     "check": "node tests/check-build.cjs",
     "test:dependencies": "node scripts/run-python.cjs scripts/run-runtime-tests.py",
-    "test:runner": "node scripts/run-python.cjs -m unittest discover -s tests -p runtime_runner_test.py -v"
+    "test:runner": "node scripts/run-python.cjs -m unittest discover -s tests -p runtime_runner_test.py -v",
+    "test:launcher": "node scripts/run-python.cjs -m unittest discover -s tests -p start_basis_test.py -v",
+    "build:beta": "npm run build && npm run check && node scripts/build-beta.cjs",
+    "test:beta": "node scripts/run-python.cjs scripts/run-beta-smoke.py",
+    "verify:beta": "node scripts/verify-beta.cjs",
+    "check:access": "node deploy/cloudflare/check-access.cjs"
   },
   "engines": {
     "node": ">=20"

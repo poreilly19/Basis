@@ -56,7 +56,7 @@ class CalculationBrowserTests(unittest.TestCase):
 
     def test_worker_refresh_preserves_uncommitted_input_and_focus(self):
         self.page.evaluate("setMode('inputs');go('property','desc')")
-        name = self.page.locator('#pane .f').filter(has_text='Property name').locator('input')
+        name = self.page.locator('#pane .f').filter(has_text='Property Name').locator('input')
         name.fill('Uncommitted typing')
         result = self.page.evaluate('''async () => {
           const active=document.activeElement,before=S.name;

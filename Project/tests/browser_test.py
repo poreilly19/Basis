@@ -23,17 +23,32 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def open_library_actions(page):
+    tab = page.get_by_role('tab', name='File', exact=True)
+    if tab.get_attribute('aria-selected') != 'true':
+        tab.click()
+
+
+def open_import_menu(page):
+    page.get_by_role('tab', name='Home', exact=True).click()
+    page.get_by_role('button', name='Import', exact=True).click()
+
+
 class BrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        handler = functools.partial(QuietHandler, directory=str(ROOT / 'app'))
+        handler = functools.partial(getattr(cls, 'handler_class', QuietHandler), directory=str(getattr(cls, 'app_directory', ROOT / 'app')))
         cls.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.playwright = sync_playwright().start()
-        executable = os.environ.get('CHROMIUM_PATH') or shutil.which('chromium')
-        cls.browser = cls.playwright.chromium.launch(
-            executable_path=executable, headless=True, args=['--no-sandbox'])
+        engine = os.environ.get('BASIS_TEST_BROWSER', 'chromium')
+        if engine not in ('chromium', 'firefox', 'webkit'):
+            raise RuntimeError('BASIS_TEST_BROWSER must be chromium, firefox or webkit')
+        options = {'headless': True}
+        if engine == 'chromium':
+            options.update(executable_path=os.environ.get('CHROMIUM_PATH') or shutil.which('chromium'), args=['--no-sandbox'])
+        cls.browser = getattr(cls.playwright, engine).launch(**options)
         cls.url = f'http://127.0.0.1:{cls.server.server_port}'
 
     @classmethod
@@ -71,8 +86,9 @@ class BrowserTests(unittest.TestCase):
 
     def upload(self, file):
         self.page.evaluate('setMode("portfolio")')
+        open_import_menu(self.page)
         with self.page.expect_file_chooser() as choice:
-            self.page.get_by_role('button', name='Import model', exact=True).click()
+            self.page.get_by_role('menuitem', name='Basis property or portfolio file…', exact=True).click()
         choice.value.set_files(str(file))
 
     def read_archive(self, file):
@@ -88,7 +104,8 @@ class BrowserTests(unittest.TestCase):
         }''')
         expected = self.page.evaluate('JSON.parse(JSON.stringify(S))')
         with self.page.expect_download() as download:
-            self.page.get_by_role('button', name='Save model .basiscre', exact=True).click()
+            self.page.get_by_role('button', name='Export / Backup', exact=True).click()
+            self.page.get_by_role('dialog', name='Export and Backup', exact=True).get_by_role('button', name='Download', exact=True).click()
         saved = Path(self.tmp.name) / download.value.suggested_filename
         download.value.save_as(saved)
         self.assertEqual(self.read_archive(saved)['model'], expected)
@@ -110,8 +127,10 @@ class BrowserTests(unittest.TestCase):
         self.page.evaluate('PW.q')
         self.page.locator('.deal-choice').filter(has_text='Scenario portfolio').click()
         self.page.wait_for_function('pwPf().name==="Scenario portfolio"')
+        open_library_actions(self.page)
         with self.page.expect_download() as download:
-            self.page.get_by_role('button', name='Save portfolio .basiscre', exact=True).click()
+            self.page.get_by_role('button', name='Export / Backup', exact=True).click()
+            self.page.get_by_role('dialog', name='Export and Backup', exact=True).get_by_role('button', name='Download', exact=True).click()
         saved = Path(self.tmp.name) / 'export.basiscre'
         download.value.save_as(saved)
         after = self.read_archive(saved)['portfolio']
@@ -189,16 +208,19 @@ class BrowserTests(unittest.TestCase):
           window.originalPwPrepareModel=pwPrepareModel;
           pwPrepareModel=async()=>{throw Error('injected quota failure');};
         }''')
-        self.page.get_by_role('button', name='+ New property', exact=True).click()
+        self.page.get_by_role('button', name='New Property', exact=True).click()
+        dialog=self.page.get_by_role('dialog', name='Create Property', exact=True)
+        dialog.get_by_role('button', name='Create and Continue', exact=True).click()
+        expect_message=dialog.get_by_role('alert')
         self.page.wait_for_function('document.body.textContent.includes("injected quota failure")')
+        self.assertIn('injected quota failure',expect_message.inner_text())
         self.assertEqual(self.page.evaluate('PW.ix.props.length'), 1)
-        self.page.get_by_role('button', name='OK', exact=True).click()
-        self.page.evaluate('pwPrepareModel=window.originalPwPrepareModel')
-        self.page.get_by_role('button', name='+ New property', exact=True).click()
+        self.page.evaluate('() => {pwPrepareModel=window.originalPwPrepareModel;}')
+        dialog.get_by_role('button', name='Create and Continue', exact=True).click()
         self.page.wait_for_function('PW.ix.props.length===2 && MODE==="inputs"')
 
     def test_cancel_new_portfolio_preserves_library(self):
-        self.page.get_by_role('button', name='+ New portfolio', exact=True).click()
+        self.page.locator('.ribbon').get_by_role('button', name='New Portfolio', exact=True).click()
         self.page.get_by_role('button', name='Cancel', exact=True).click()
         self.assertEqual(self.page.evaluate('PW.ix.pfs.length'), 1)
 
@@ -230,6 +252,7 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(result, {'images':0,'text':True})
 
     def test_workspace_yield_uses_a_single_percentage_conversion(self):
+        self.page.locator('.basis-portfolio-trend > summary').click()
         expected = self.page.evaluate('''() => { const included=pwList().filter(p=>p.inc!==false);
           return pc(included.reduce((a,p)=>a+num(p.noi),0)/included.reduce((a,p)=>a+num(p.pv),0),2);
         }''')
@@ -305,9 +328,11 @@ class BrowserTests(unittest.TestCase):
         saved = Path(self.tmp.name) / 'conflict-backup.basiscre'
         download.value.save_as(saved)
         self.assertEqual(self.read_archive(saved)['model']['name'], 'Unsaved second-tab edits')
+        open_library_actions(second)
         second.get_by_role('button', name='Reload library', exact=True).click()
         second.get_by_role('alertdialog').get_by_role('button', name='Cancel', exact=True).click()
         self.assertEqual(second.evaluate('S.name'), 'Unsaved second-tab edits')
+        open_library_actions(second)
         second.get_by_role('button', name='Reload library', exact=True).click()
         second.get_by_role('alertdialog').get_by_role('button', name='Reload library', exact=True).click()
         second.wait_for_function("S.name==='Saved in first tab' && !PW.conflict")
@@ -336,7 +361,7 @@ class BrowserTests(unittest.TestCase):
         }''')
         self.assertIn('jan 2027 – jun 2027 (6 months)', self.page.locator('#pfpage').inner_text().lower())
         self.assertEqual(self.page.locator('#pfpage tr').filter(has_text='NET OPERATING INCOME').inner_text().split()[-2:], ['14,400','4,800'])
-        self.page.get_by_role('tab', name='Valuation', exact=True).click()
+        self.page.get_by_role('tab', name='Portfolio Value', exact=True).click()
         discount = self.page.locator('#pfpage .f').filter(has_text='Portfolio discount rate').locator('input')
         discount.fill('20')
         discount.press('Tab')

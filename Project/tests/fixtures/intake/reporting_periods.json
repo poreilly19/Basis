@@ -1,0 +1,30 @@
+{
+  "documents": [
+    {
+      "id": "rent-roll-jan",
+      "name": "January Rent Roll.txt",
+      "pages": [{"n": 1, "text": "Rent Roll as of January 1, 2026. North Labs Suite 100: 1,000 SF, monthly base rent $1,000. From January 1, 2027: $1,100 monthly. Total annual base rent $12,000. Total area 1,000 SF."}],
+      "results": [{
+        "docType": "rent_roll", "asOf": "2026-01-01",
+        "tenants": [{"name": "North Labs", "suite": "100", "sf": 1000, "status": "in_place", "start": "2025-01-01", "end": "2030-12-31", "rent": [{"from": "2025-01-01", "amount": 1000, "unit": "monthly"}, {"from": "2027-01-01", "amount": 1100, "unit": "monthly"}], "src": {"page": 1, "quote": "North Labs Suite 100: 1,000 SF, monthly base rent $1,000."}}],
+        "totals": {"scope": "document", "rentRollSF": 1000, "occupiedSF": 1000, "vacantSF": 0, "rentRollAnnualRent": 12000, "src": {"page": 1, "quote": "Total annual base rent $12,000. Total area 1,000 SF."}}
+      }]
+    },
+    {
+      "id": "pnl-jun", "name": "June Actuals.txt",
+      "pages": [{"n": 1, "text": "Actual January 1 through June 30, 2028 (6 months). Taxes $3,000. Insurance $1,500. Utility credit ($500). Total operating expenses $4,000. Total revenue $6,000. NOI $2,000. Parking income $600."}],
+      "results": [{
+        "docType": "operating_statement", "asOf": "2028-06-30",
+        "reporting": {"start": "2028-01-01", "end": "2028-06-30", "months": 6, "column": "actual"},
+        "expenses": [
+          {"name": "Taxes", "amount": 3000, "months": 6, "basis": "total", "recoverable": false, "src": {"page": 1, "quote": "Taxes $3,000."}},
+          {"name": "Insurance", "amount": 1500, "months": 6, "basis": "total", "recoverable": false, "src": {"page": 1, "quote": "Insurance $1,500."}},
+          {"name": "Utility credit", "amount": "(500)", "months": 6, "basis": "total", "recoverable": false, "src": {"page": 1, "quote": "Utility credit ($500)."}}
+        ],
+        "otherIncome": [{"name": "Parking", "amount": 600, "months": 6, "src": {"page": 1, "quote": "Parking income $600."}}],
+        "totals": {"scope": "document", "totalOperatingExpenses": 4000, "totalRevenue": 6000, "noi": 2000, "src": {"page": 1, "quote": "Total operating expenses $4,000. Total revenue $6,000. NOI $2,000."}}
+      }]
+    }
+  ],
+  "expected": {"annualBaseRentAtSnapshot": 12000, "reportedExpenses": 4000, "reportedNOI": 2000, "annualExpenseInputs": [6000, 3000, -1000], "annualExpenseTotal": 8000, "annualParking": 1200}
+}
