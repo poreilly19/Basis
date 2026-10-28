@@ -1,5 +1,9 @@
 # First-cohort acceptance record
 
+Current results: [October 28 owner-preview acceptance](DEPLOYMENT_2026_10_28.md).
+Owner-reported Google login and workspace access passed; live save/reload,
+backup/export and the other checks below still need their own results.
+
 Use the synthetic files in `samples/beta/` for a repeatable live-origin check.
 They contain no real tenant or property information. They exercise a simple flat
 lease, annual rent roll and operating statement, not complex underwriting or an

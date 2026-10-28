@@ -1,5 +1,9 @@
 # Basis owner preview — 2026-10-27
 
+Historical infrastructure snapshot. See the
+[October 28 acceptance update](DEPLOYMENT_2026_10_28.md) for current license,
+hosted CI and owner-login results.
+
 The owner preview is deployed at **https://basis.pjoreilly19.workers.dev/**.
 This records infrastructure and automated checks; wider beta acceptance remains
 open. The application is still version 0.7.27.

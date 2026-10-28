@@ -2,7 +2,7 @@
 
 The selected host is the existing **`basis` Cloudflare Worker**, serving the
 static release at **https://basis.pjoreilly19.workers.dev/**. The owner preview is
-deployed; see the [deployment record](DEPLOYMENT_2026_10_27.md) for completed
+deployed; see the [deployment record](DEPLOYMENT_2026_10_28.md) for completed
 checks and remaining acceptance before inviting testers.
 [Cloudflare Pages](CLOUDFLARE_BETA.md) remains an alternative.
 
