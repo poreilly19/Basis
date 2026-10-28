@@ -1,8 +1,8 @@
 # Basis release-readiness checklist (not legal clearance)
 
-Current beta handoff: [Cloudflare Pages + Access](CLOUDFLARE_BETA.md).
+Current beta handoff: [Cloudflare Workers + Access](CLOUDFLARE_WORKERS_BETA.md).
 Earlier assessment: [public-alpha readiness and original-interface restoration](RELEASE_READINESS_0_7_22.md).
-Current test evidence: [0.7.27 validation](VALIDATION_0_7_27.md).
+Current test evidence: [0.7.29 review and validation](CODE_REVIEW_0_7_29.md).
 The supplied interface's ribbon and left Navigator have been [restored on the corrected app](RIBBON_0_7_25.md). Broad unchecked
 items below include remaining scope even where later targeted cases pass.
 The owner selected the [MIT License](../LICENSE) on October 28, 2026.
@@ -88,7 +88,8 @@ for every open-source release.
 - [ ] Mobile Safari (hosted URL), keyboard, screen-reader testing
 - [ ] Downloads/extension fallback in native app and hosted browsers
 - [x] Pinned CI workflow and portable runners; local runner/launcher unit checks
-- [ ] GitHub-hosted CI execution, Windows/Node 20 validation and release/versioning policy
+- [x] GitHub-hosted CI execution, including Windows and Node 20/24 validation
+- [ ] Document the longer-term release/versioning policy
 
 Current regression evidence is in the [0.7.26 validation snapshot](VALIDATION_0_7_26.md).
 The 17 optional real-runtime checks pass again on the beta candidate. Served-build

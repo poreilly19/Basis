@@ -6,8 +6,10 @@ The baseline regression suite passed, including 207 Chromium workflows and
 edge cases and independent expected values, not by treating that green baseline
 as proof that every model was correct.
 
-Integration verification of the fixes is in progress. Final results are recorded
-below before publication.
+The corrected code is published as commit
+`38aade1742434a865532b69f32d61a674c62d04f`. The full Node suite, served-release
+smoke checks and all nine hosted CI jobs passed. Completed checks are recorded
+below.
 
 ## Saved models and workspace consistency
 
@@ -99,6 +101,27 @@ name and spread alone do not establish a future rate forecast.
 
 ## Validation and practical limits
 
+- Full `npm test` suite passed, including 31 new position, budget and debt-curve
+  regression cases and the existing financial, codec and lifecycle tests.
+- [Hosted CI run 40621811050](https://github.com/poreilly19/Basis/actions/runs/40621811050)
+  passed all nine jobs on the first attempt for the exact code commit above:
+  211 Chromium browser workflows, 18 real PDF/spreadsheet integration cases,
+  Node 20/24 checks on Windows/Ubuntu, Windows Chromium beta smoke, and Ubuntu
+  Chromium/Firefox/WebKit beta smoke.
+- Local served-release smoke passed six cases each in Chromium, Firefox and
+  WebKit. WebKit used the existing workspace runtime libraries; no product test
+  assertions were skipped.
+- A separate complete local run also passed all 211 Chromium workflows and all
+  18 real-library integration cases on the same frozen application bytes.
+- The original financial parity fixture remains unchanged. Four intentional
+  ownership-position corrections are separately anchored to its hashes and
+  independently checked against the restored capital present value. Every
+  other field in those result graphs, and all unaffected cases, retains exact
+  parity.
+- Build and manifest verification passed for the 12-file MIT-licensed deployment.
+  Application SHA-256:
+  `62bd6098b4c59d650acd4340a135946921be936908705d8c1734e920d017993b`.
+
 New financial vectors are in `position_financial.test.cjs`,
 `budget_override_financial.test.cjs` and `debt_curve.test.cjs`. Storage, reader,
 report, intake and native-browser tests include reproductions of their respective
@@ -110,6 +133,8 @@ assumptions. Recheck saved models using actual/budget overrides, floating debt o
 ownership-position comparisons. Previously imported inputs cannot be repaired
 reliably without their source documents; review affected capital timing, market
 profiles and recovery assumptions against the originals.
+Use version 0.7.29 or newer for fractional-percent floating curves; older versions
+can misinterpret explicit sub-1% rates.
 
 The review found no reproducible DOM script injection or API-key disclosure in
 the inspected rendering and provider paths. That is a bounded finding, not a
