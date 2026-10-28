@@ -33,6 +33,38 @@ class AccuracyBrowserTests(unittest.TestCase):
         for actual, expected in zip(values, [2400,480,-1320]):
             self.assertAlmostEqual(actual, expected, places=7)
 
+    def test_floating_curve_records_percent_units_and_keeps_invalid_edits_out_of_model(self):
+        self.flat()
+        self.page.evaluate('''() => {
+          S.loanOn=true;S.loans=[{id:'floating',name:'Floating',sizing:'amount',amount:60000,
+            rateType:'floating',curve:'0.005',spread:0,ioAll:true,floor:0,cap:0}];
+          R=calc(S);setMode('inputs');go('investment','debt');
+        }''')
+        curve=self.page.get_by_role('textbox',name='Index Curve, Percent by Year',exact=True)
+        curve.fill('0.5; 0.25');curve.press('Tab')
+        self.assertEqual(self.page.evaluate("S.loans[0].curve.split(/[,;\\s]+/)"),['0.5%','0.25%'])
+        values=self.page.evaluate('''() => {
+          const d=calc(S);return [0,1].map(y=>d.intM.slice(y*12,y*12+12).reduce((a,b)=>a+b,0));
+        }''')
+        for actual,expected in zip(values,[300,150]):
+            self.assertAlmostEqual(actual,expected,places=7)
+        curve.fill('0.5; invalid');curve.press('Tab')
+        expect(curve).to_have_attribute('aria-invalid','true')
+        self.assertEqual(self.page.evaluate("S.loans[0].curve.split(/[,;\\s]+/)"),['0.5%','0.25%'])
+        curve.fill('0; 1');curve.press('Tab')
+        expect(curve).not_to_have_attribute('aria-invalid','true')
+        self.assertEqual(self.page.evaluate("S.loans[0].curve.split(/[,;\\s]+/)"),['0%','1%'])
+        self.assertEqual(self.page.evaluate("basisCheckDestination({target:{collection:'loans',record:'floating',field:'curve'}}).route"),['investment','debt'])
+
+    def test_invalid_ground_lease_timing_has_a_visible_recoverable_error(self):
+        self.flat()
+        self.page.evaluate('''async () => {
+          S.pos={resetOn:true,resetFirst:1,resetEvery:0.5};
+          DIRTY();await recalcInBackground();setMode('inputs');go('valuation','pos');
+        }''')
+        expect(self.page.locator('#pane').get_by_role('alert')).to_contain_text('positive whole number of years')
+        self.assertTrue(self.page.evaluate("basisModelIssues().some(i=>i.sev==='error'&&i.target?.collection==='position')"))
+
     def test_draw_only_loan_returns_remain_visible_in_reports_and_native_roundtrip(self):
         self.flat()
         result = self.page.evaluate('''async () => {

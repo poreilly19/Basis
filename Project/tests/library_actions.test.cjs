@@ -162,6 +162,31 @@ async function test(name,fn){try{await fn();passed++;console.log('PASS',name);}c
     assert.equal(stored.name,'Captured current model');assert.equal(stored.note,'Snapshot at click');
     assert.equal(page.run('S.name'),'Edits made while copy waits');assert.equal(page.run('S.note'),'Still editing');assert.equal(page.run('PW.cur'),'p');
   });
+  await test('Copied workspace metrics describe the same edited snapshot as the saved model',async()=>{
+    const engineContext=vm.createContext({});
+    vm.runInContext(fs.readFileSync(path.join(root,'src/financial_engine.js'),'utf8'),engineContext);
+    const engine=vm.runInContext('({blankState,calc})',engineContext),source=engine.blankState();
+    Object.assign(source,{name:'Current source',startYear:2026,startMonth:1,years:2,gvRate:0,clRate:0,
+      inflExp:0,inflRent:0,inflCPI:0,loanOn:false,exitCap:0.08,costSale:0,discount:0});
+    source.infl.forEach(series=>{series.rates=[0,0,0,0];});
+    source.areas=[{id:'area',name:'Building',sf:1000,basis:true}];
+    source.tenants=[{id:'tenant',name:'Tenant',sf:1000,start:'2026-01',end:'2035-12',
+      rent:12,step:0,free:0,rec:source.recs[1].id,mla:source.mlas[0].id,expiry:'Vacate'}];
+    source.ops=[];
+    // Independent economics: $12,000 annual NOI for two years, then a
+    // $150,000 sale at 8%. With zero discount, value is $174,000.
+    const before=engine.calc(source);assert.equal(before.sf,1000);assert.equal(before.ann.noi[0],12000);assert.equal(before.pv,174000);
+    const page=fixture();page.c.calc=engine.calc;page.c.copySource=clone(source);
+    page.shared.data.get('pwm_p').s=JSON.stringify(source);
+    page.run(`PW.cur=PW.local.cur='p';S=JSON.parse(JSON.stringify(copySource));
+      Object.assign(pwRec('p'),{sf:1000,pv:174000,noi:12000});
+      S.areas[0].sf=2000;S.tenants[0].sf=2000;S.name='Edited before copying';`);
+    const [id]=await page.run(`pwCopy(['p'],'other','other-base',true)`);
+    const stored=JSON.parse(page.shared.data.get('pwm_'+id).s),record=page.shared.data.get('pw_index').props.find(p=>p.id===id);
+    assert.equal(stored.areas[0].sf,2000);assert.equal(stored.tenants[0].sf,2000);
+    assert.deepEqual([record.sf,record.noi,record.pv],[2000,24000,348000]);
+    assert.deepEqual(JSON.parse(page.run(`JSON.stringify([pwRec('${id}').sf,pwRec('${id}').noi,pwRec('${id}').pv])`)),[2000,24000,348000]);
+  });
   await test('A captured copy never rolls back a newer successful save of its current source',async()=>{
     const page=fixture();page.run(`PW.cur=PW.local.cur='p';S={...initialModels.p,name:'Old copy snapshot'};var releaseQueue;pwEnq(()=>new Promise(resolve=>{releaseQueue=resolve;}));`);
     await new Promise(resolve=>setImmediate(resolve));
@@ -186,6 +211,36 @@ async function test(name,fn){try{await fn();passed++;console.log('PASS',name);}c
   await test('Failed recalculation leaves metadata, caches, selection, and stored models unchanged',async()=>{
     const page=fixture();page.c.calc=()=>({sf:987654,pv:1234567,ann:{noi:[54321]}});page.shared.failNextWrite('pw_index');
     await unchangedAfterFailure(page,'pwRecalcAll()');
+  });
+  await test('Recalculation saves a dirty current snapshot and its metrics atomically with autosave off',async()=>{
+    const page=fixture();page.c.calc=model=>({sf:model.areas[0]?.sf||0,pv:(model.areas[0]?.sf||0)*100,ann:{noi:[(model.areas[0]?.sf||0)*5]}});
+    page.run(`var BASIS_PREFS={get:()=>({autosave:false})};PW.cur=PW.local.cur='p';PW.local.edited=20;
+      S={...initialModels.p,name:'Manually edited current',areas:[{id:'area',sf:200,basis:true}]};`);
+    const other=clone(page.shared.data.get('pwm_x')),neighbor=clone(page.shared.data.get('pwm_q'));
+    await page.run('pwRecalcAll()');
+    const record=page.shared.data.get('pw_index').props.find(p=>p.id==='p'),stored=JSON.parse(page.shared.data.get('pwm_p').s);
+    assert.equal(stored.name,'Manually edited current');assert.equal(stored.areas[0].sf,200);
+    assert.deepEqual([record.name,record.sf,record.pv,record.noi],['Manually edited current',200,20000,1000]);
+    assert.equal(page.run('PW.local.edited'),0);assert.equal(page.run('PW.timer'),null);
+    assert.deepEqual(page.shared.data.get('pwm_x'),other);assert.deepEqual(page.shared.data.get('pwm_q'),neighbor);
+    await page.run('pwRefreshLibrary()');
+    assert.equal(page.run('S.name'),'Manually edited current');assert.equal(page.run('S.areas[0].sf'),200);
+  });
+  await test('Failed recalculation with unsaved manual edits preserves durable models and live edits',async()=>{
+    const page=fixture();page.c.calc=model=>({sf:model.areas[0]?.sf||0,pv:20000,ann:{noi:[1000]}});
+    page.run(`var BASIS_PREFS={get:()=>({autosave:false})};PW.cur=PW.local.cur='p';PW.local.edited=20;
+      S={...initialModels.p,name:'Keep unsaved manual edits',areas:[{id:'area',sf:200,basis:true}]};`);
+    page.shared.failNextWrite('pw_index');await unchangedAfterFailure(page,'pwRecalcAll()');
+    assert.equal(page.run('S.name'),'Keep unsaved manual edits');assert.equal(page.run('PW.local.edited'),20);
+    assert.equal(JSON.parse(page.shared.data.get('pwm_p').s).name,'Original A');
+  });
+  await test('Edits made while recalculation reads another model cancel the pending publication',async()=>{
+    const page=fixture();page.run(`PW.cur=PW.local.cur='p';S={...initialModels.p,name:'Captured recalculation'};PW.local.edited=20;
+      PW.cache.delete('q');var releaseRead,readEnteredResolve,readEntered=new Promise(resolve=>{readEnteredResolve=resolve;}),originalGetModel=pwGetModel;
+      pwGetModel=async(...args)=>{const result=await originalGetModel(...args);return new Promise(resolve=>{releaseRead=()=>resolve(result);readEnteredResolve();});};`);
+    const before=page.shared.snapshot(),recalculating=page.run('pwRecalcAll()'),rejected=assert.rejects(recalculating,/current property or scenario changed/);
+    await page.run('readEntered');page.run(`S.name='Typed while recalculation waits';releaseRead();`);await rejected;
+    assert.deepEqual(page.shared.snapshot(),before);assert.equal(page.run('S.name'),'Typed while recalculation waits');assert.equal(page.run('PW.local.edited'),20);
   });
   await test('A finishing copy cannot replace the newer cache owned by an outgoing property save',async()=>{
     const page=fixture();page.run(`PW.cur=PW.local.cur='p';S={...initialModels.p,name:'Old context'};var enteredResolve,entered=new Promise(resolve=>{enteredResolve=resolve;}),releaseCommit,firstCommit=true,originalCommit=pwCommit;pwCommit=async(...args)=>{if(firstCommit){firstCommit=false;await new Promise(resolve=>{releaseCommit=resolve;enteredResolve();});}return originalCommit(...args);};`);

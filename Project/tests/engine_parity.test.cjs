@@ -138,6 +138,13 @@ if (process.argv[2] === '--capture-original') {
   console.log(`Captured ${cases.length} pre-extraction exact-output fingerprints`);
 } else {
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
+  const corrections = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/engine-parity-corrections-0_7_29.json'), 'utf8'));
+  test('reviewed numerical corrections retain the original pre-extraction fixture unchanged', () => {
+    assert.equal(sha(fs.readFileSync(fixturePath)), corrections.baselineFixtureSha256);
+    assert.deepEqual(Object.keys(corrections.cases).sort(), ['sample-nominal','sample-effective','sample-annual','future-floating-maturing-debt'].sort());
+    for (const [name, correction] of Object.entries(corrections.cases))
+      assert.equal(correction.originalOutputSha256, fixture.cases[name].outputSha256);
+  });
   test('canonical financial source is embedded verbatim and evaluates without browser globals', () => {
     const document = fs.readFileSync(path.join(root, 'app/index.html'), 'utf8');
     // The inert worker intentionally receives another verbatim copy. This
@@ -150,10 +157,27 @@ if (process.argv[2] === '--capture-original') {
     assert.equal(html.slice(a, b + end.length), source.trim());
     assert.equal(typeof load(source).calc, 'function');
   });
-  for (const item of cases) test(`exact pre/post extraction parity and frozen input: ${item.name}`, () => {
+  for (const item of cases) test(`${corrections.cases[item.name] ? 'reviewed financial correction with exact remaining parity' : 'exact pre/post extraction parity'} and frozen input: ${item.name}`, () => {
     const value = evaluate(load(source), item);
     assert.equal(sha(canonical(value.input)), fixture.cases[item.name].inputSha256, 'Shared input changed');
-    assert.equal(sha(canonical(value.output)), fixture.cases[item.name].outputSha256, 'Full result graph changed');
+    const correction=corrections.cases[item.name];
+    if (!correction) assert.equal(sha(canonical(value.output)), fixture.cases[item.name].outputSha256, 'Full result graph changed');
+    else {
+      const {capital,originalPositions}=correction, positions=value.output.positions;
+      let restoredCapitalPV=0;
+      for(let y=0;y<capital.payments;y++) restoredCapitalPV+=capital.annualAmount*(1+capital.annualGrowth)**y/(1+capital.discountRate)**(y+1);
+      const near=(actual,expected,label)=>assert.ok(Number.isFinite(actual)&&Math.abs(actual-expected)<1e-7,`${label}: expected ${expected}, received ${actual}`);
+      near(positions.feeSimple-originalPositions.feeSimple,restoredCapitalPV,'Restored duplicate capital deduction');
+      near(positions.gap,originalPositions.gap-restoredCapitalPV,'Position gap after the same capital correction');
+      // Restore only the two independently reviewed numeric fields for this
+      // comparison. The unchanged original hash still checks every other value,
+      // key, typed array and alias in the complete result graph.
+      const current={feeSimple:positions.feeSimple,gap:positions.gap};
+      try{
+        Object.assign(positions,originalPositions);
+        assert.equal(sha(canonical(value.output)),fixture.cases[item.name].outputSha256,'An unreviewed result field changed');
+      }finally{Object.assign(positions,current);}
+    }
   });
   test('result data retains typed arrays, aliases and infinite maturity across structured clone', () => {
     const api = load(source), model = api.sampleState(), result = api.calc(model);

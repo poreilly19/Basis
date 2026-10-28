@@ -1,5 +1,6 @@
 """Offline integration of independently assembled OOXML date-epoch fixtures."""
 import io
+import re
 import unittest
 import zipfile
 
@@ -60,6 +61,49 @@ class OfficeDateTests(unittest.TestCase):
         self.assertEqual(self.page.evaluate('''() => {
           try{officeSheetDate(2957004,false,true);return null;}catch(error){return error.message;}
         }'''), 'Workbook contains an invalid Excel date serial')
+
+    def test_native_xml_writer_replaces_rows_in_equivalent_template_xml(self):
+        with zipfile.ZipFile(io.BytesIO(bytes(workbook('0')))) as zipped:
+            baseline = {name: zipped.read(name).decode() for name in zipped.namelist()}
+        for kind in ['single-quotes', 'prefixed', 'paired-sheets', 'prefixed-single-quotes']:
+            parts = dict(baseline)
+            for name, text in parts.items():
+                if name.startswith('xl/worksheets/'):
+                    text = text.replace('<sheetData>', '<dimension ref="A1:E2"/><sheetData xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:custom="urn:producer" mc:Ignorable="custom" custom:meta="keep-sheetData">')
+                    text = text.replace('<row r="1">', '<row r="1" custom:note="keep-header">')
+                    text = text.replace('</sheetData>', '</sheetData><!-- preserve this comment --><dataValidations count="1"><dataValidation type="list" sqref="B2:B9"><formula1>Values!$A$1:$A$2</formula1></dataValidation></dataValidations>')
+                if 'paired' in kind:
+                    text = re.sub(r'<sheet\b([^>]*?)/>', r'<sheet\1></sheet>', text)
+                if 'prefixed' in kind:
+                    text = text.replace('xmlns=', 'xmlns:q=', 1)
+                    text = re.sub(r'<(/?)([A-Za-z_][\w.-]*)(?=[\s/>])', r'<\1q:\2', text)
+                if 'single-quotes' in kind:
+                    text = text.replace('"', "'")
+                parts[name] = text
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zipped:
+                for name, text in parts.items():
+                    zipped.writestr(name, text)
+            with self.subTest(kind=kind):
+                result = self.page.evaluate('''async bytes => {
+                  const T=await x4ReadTemplate(new Uint8Array(bytes));
+                  const A={sheets:Object.fromEntries(Object.entries(T.sheets).map(([name,s])=>[name,s.rows.map(row=>{const r=row.slice();r[1]='Changed '+name;r[4]=123456.75;return r;})]))};
+                  const output=await x4WriteWorkbook(T,A,null),back=await x4ReadTemplate(output),archive=officeZipOpen(output);
+                  const text=new TextDecoder().decode(await archive.read(back.sheets.PropertyAssets.path));
+                  const doc=intXML(text,'Exported worksheet','worksheet');
+                  return {rows:back.sheets.PropertyAssets.rows.length,name:back.sheets.PropertyAssets.rows[0][1],amount:back.sheets.PropertyAssets.rows[0][4],
+                    rowCount:intTags(doc,'row').length,dimension:intTags(doc,'dimension')[0].getAttribute('ref'),
+                    validation:intTags(doc,'dataValidation')[0].getAttribute('sqref'),formula:intTags(doc,'formula1')[0].textContent,
+                    comment:text.includes('preserve this comment'),date:back.sheets.PropertyAssets.rows[0][3].d,
+                    mcNamespace:intTags(doc,'sheetData')[0].getAttribute('xmlns:mc'),customNamespace:intTags(doc,'sheetData')[0].getAttribute('xmlns:custom'),
+                    ignorable:intTags(doc,'sheetData')[0].getAttributeNS('http://schemas.openxmlformats.org/markup-compatibility/2006','Ignorable'),
+                    metadata:intTags(doc,'sheetData')[0].getAttributeNS('urn:producer','meta'),headerNote:intTags(doc,'row')[0].getAttributeNS('urn:producer','note')};
+                }''', list(output.getvalue()))
+                self.assertEqual(result, {'rows': 1, 'name': 'Changed PropertyAssets', 'amount': 123456.75,
+                                         'rowCount': 2, 'dimension': 'A1:E2', 'validation': 'B2:B9',
+                                         'formula': 'Values!$A$1:$A$2', 'comment': True, 'date': '2023-03-15',
+                                         'mcNamespace': 'http://schemas.openxmlformats.org/markup-compatibility/2006', 'customNamespace': 'urn:producer',
+                                         'ignorable': 'custom', 'metadata': 'keep-sheetData', 'headerNote': 'keep-header'})
 
     def test_equivalent_styles_keep_dates_and_actual_import_start_in_both_epochs(self):
         main = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'

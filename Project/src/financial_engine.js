@@ -1184,16 +1184,17 @@ function calc(S){
   const ACT=new Map(), BUD=new Map(), aBase=num(S.startYear)*12+(num(S.startMonth)||1)-1;
   if(actK>=0) for(const a of (S.actuals||[])) if(a&&a.line){ const mp=atlParse(a.data); if(mp.size) ACT.set(a.line,mp); }
   if(budK>actK) for(const b of (S.budgets||[])) if(b&&b.line){ const mp=atlParse(b.data); if(mp.size) BUD.set(b.line,mp); }
-  const applyAct=(key,arr,also)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
-    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; } } };
+  const revenueOverrideMonths=new Set();
+  const applyAct=(key,arr,also,revenue=false)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
+    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; if(revenue) revenueOverrideMonths.add(i); } } };
   if(ACT.size||BUD.size){
-    applyAct("rent",sched,[gpr,tpgr,egr]); applyAct("reimb",reimb,[tpgr,egr]); applyAct("cpi",cpiRev,[tpgr,egr]); applyAct("pr",prM,[tpgr,egr]);
+    applyAct("rent",sched,[gpr,tpgr,egr],true); applyAct("reimb",reimb,[tpgr,egr],true); applyAct("cpi",cpiRev,[tpgr,egr],true); applyAct("pr",prM,[tpgr,egr],true);
     [[miscL,miscT,S.misc,"misc"],[parkL,parkT,S.parking,"park"],[storL,storT,S.storage,"stor"]].forEach(([LL,T,src,k])=>LL.forEach((x,j)=>{
-      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr]); }));
+      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr],!d.refOnly); }));
     for(const x of opLines) if(x.def.id) applyAct("op:"+x.def.id,x.m,x.def.refOnly?[]:[opTot]);
-    const revK=/^(rent|reimb|cpi|pr|misc|park|stor)/;   // months carried by revenue actuals or budgets have no general vacancy or credit loss
-    for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]) if(S.actNoVac!==false&&[...MP.keys()].some(k=>revK.test(k)))
-      for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
+    // Only supplied, cash-flow revenue values are already net of vacancy/loss.
+    // Missing forecast months and reference-only lines keep their existing policy.
+    if(S.actNoVac!==false) for(const i of revenueOverrideMonths){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
   }
   const noi=Z(); for(let i=0;i<nM;i++) noi[i]=egr[i]-opTot[i];
 
@@ -1214,7 +1215,7 @@ function calc(S){
   const leasing=Z(),cfbds=Z();
   for(const [LL,T] of [[capLines,capTot],[nonLines,nonTot]]) for(const x of LL){ const nv=paySpreadLine(S,x.m,x.def); if(!nv) continue;
     if(!(x.def&&x.def.refOnly)) for(let i=0;i<nM;i++) T[i]+=nv[i]-x.m[i]; x.m.set(nv); }
-  if(ACT.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
+  if(ACT.size||BUD.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
     capLines.forEach(x=>{ if(x.def.id) applyAct("cap:"+x.def.id,x.m,x.def.refOnly?[]:[capTot]); }); nonLines.forEach(x=>{ if(x.def.id) applyAct("non:"+x.def.id,x.m,x.def.refOnly?[]:[nonTot]); }); }
   const LINEM={rent:sched,reimb,cpi:cpiRev,pr:prM,ti:tiM,lc:lcM};
   for(const [LL,k] of [[opLines,"op"],[capLines,"cap"],[nonLines,"non"]]) LL.forEach(x=>{ if(x.def.id) LINEM[k+":"+x.def.id]=x.m; });
@@ -1294,6 +1295,19 @@ function calc(S){
    return premium and an exit cap 25-50bp wide of fee simple, while the leased fee is a
    bond-like stream capped at its own rate. The deck's warning that "A + B does not always
    equal C" is the point of the comparison, not a rounding error to be reconciled away. */
+function positionYearIssues(S){
+  const P=S.pos||{}, issues=[];
+  const whole=(key,label,allowEmpty)=>{
+    const raw=P[key], empty=raw===undefined||raw===null||typeof raw==="string"&&raw.trim()==="";
+    const n=typeof raw==="number"?raw:typeof raw==="string"&&raw.trim()!==""?Number(raw):NaN;
+    if(allowEmpty&&(empty||n===0)) return;
+    if(!Number.isFinite(n)||!Number.isInteger(n)||n<=0) issues.push({key,message:label+" must be a positive whole number of years."});
+  };
+  if(P.resetOn){ whole("resetFirst","First ground-rent reset",true); whole("resetEvery","Ground-rent reset interval",true); }
+  if(P.cpiOn) whole("cpiEvery","CPI catch-up interval",true);
+  if(P.optOn) whole("optYear","Ground-lease purchase-option year",false);
+  return issues;
+}
 function calcPositions(S,R){
   if(!R) return null;
   const P=S.pos||{}, nM=R.nM, nY=R.nY, sf=R.sf||1, A=R.ann;
@@ -1304,21 +1318,30 @@ function calcPositions(S,R){
   const baseGR=gr.slice();
   // NOI before ground rent — what both positions are really carved out of
   const noiPre=Z();
-  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+gr[i];
+  // Non-operating ground rent is already below NOI; only add back the portion
+  // actually deducted when arriving at NOI.
+  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+(R.glOpM?R.glOpM[i]:0);
 
   /* FMV reset: ground rent is re-struck as a percentage of land value, usually with a
      cap, because an uncapped reset is the clause that cost Lever House its leasehold. */
   const resetYrs=[];
-  if(P.resetOn&&num(P.resetEvery)>0)
-    for(let y=num(P.resetFirst)||10;y<nY;y+=num(P.resetEvery)) resetYrs.push(y);
+  const timingIssues=positionYearIssues(S), badTiming=new Set(timingIssues.map(issue=>issue.key));
+  if(P.resetOn&&!badTiming.has("resetFirst")&&!badTiming.has("resetEvery")&&num(P.resetEvery)>0){
+    const first=num(P.resetFirst)||10, every=num(P.resetEvery);
+    // Inspect only the finite analysis years. Iterating from an imported first
+    // reset or by a tiny interval can otherwise take unbounded work.
+    for(let y=0;y<nY;y++) if(y>=first&&(y-first)%every===0) resetYrs.push(y);
+  }
   /* CPI catch-up: periodically the lesser of the index move over the period and a
      compounded ceiling. */
   const cpiYrs=[];
-  if(P.cpiOn&&num(P.cpiEvery)>0)
-    for(let y=num(P.cpiEvery);y<nY;y+=num(P.cpiEvery)) cpiYrs.push(y);
+  if(P.cpiOn&&!badTiming.has("cpiEvery")&&num(P.cpiEvery)>0){
+    const every=num(P.cpiEvery);
+    for(let y=0;y<nY;y++) if(y>=every&&y%every===0) cpiYrs.push(y);
+  }
 
   const events=[];
-  let cur=null;
+  let cur=null, adjusted=false;
   for(let y=0;y<nY;y++){
     const i0=y*12;
     if(cur===null) cur=gr[i0];
@@ -1339,6 +1362,7 @@ function calcPositions(S,R){
         if(want>lim){ want=lim; capNote.push("capped at "+pc(num(P.resetCapNOI),0)+" of pre-rent NOI"); }
       }
       cur=want;
+      adjusted=true;
       note="FMV reset to "+pc(num(P.resetRate),2)+" of land"+(capNote.length?" ("+capNote.join("; ")+")":"");
     }
     if(cpiYrs.includes(y)){
@@ -1347,9 +1371,13 @@ function calcPositions(S,R){
       const cap=Math.pow(1+num(P.cpiCap),per)-1;
       const up=Math.min(idx,cap);
       cur=cur*(1+up);
+      adjusted=true;
       note=(note?note+"; ":"")+"CPI catch-up "+pc(up,2)+" (lesser of index and "+pc(num(P.cpiCap),2)+" compounded)";
     }
-    if(P.resetOn||P.cpiOn) for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur;
+    // Keep the contractual schedule until an actual reset/catch-up occurs.
+    // After an event the position scenario keeps its established level-rent
+    // policy until the next event.
+    if(adjusted){ for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur; }
     else cur=gr[Math.min(i0+11,nM-1)];
     if(note) events.push({yr:S.startYear+y,note,rent:cur*12});
   }
@@ -1379,18 +1407,21 @@ function calcPositions(S,R){
   const capLF=num(P.lfCap)||0.03;
   const pvAt=(arr,rate)=>{let v=0;for(let y=0;y<nY;y++) v+=arr[y]/Math.pow(1+rate,y+1);return v;};
   // reversion on the forward NOI in the exit year
-  const noiFwdPre=aNoiPre[nY-1]*(1+num(S.exitGrowth||0.02));
-  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+num(S.exitGrowth||0.02));
+  const exitGrowth=S.exitGrowth===undefined||S.exitGrowth===null||S.exitGrowth===""?0.02:num(S.exitGrowth);
+  const noiFwdPre=aNoiPre[nY-1]*(1+exitGrowth);
+  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+exitGrowth);
   const revFS=capFS>0?noiFwdPre/capFS*(1-num(S.costSale)):0;
   const revLH=capLH>0?noiFwdLH/capLH*(1-num(S.costSale)):0;
 
-  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)-(A.cap?A.cap[y]:0)||v),rFS)
+  // Leasing already includes capital. Keep an actual zero net cash flow rather
+  // than replacing it with gross NOI through a truthiness fallback.
+  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)),rFS)
                   +revFS/Math.pow(1+rFS,nY);
   const leasehold=pvAt(aLH,rLH)+revLH/Math.pow(1+rLH,nY);
   // the leased fee is the ground rent stream: capped, or run to an NPV when the
   // leasehold holds a purchase option at a set price
   let leasedFee, lfBasis;
-  if(P.optOn&&num(P.optYear)>0){
+  if(P.optOn&&!badTiming.has("optYear")&&num(P.optYear)>0){
     const oy=Math.min(num(P.optYear),nY);
     let v=0; for(let y=0;y<oy;y++) v+=aGR[y]/Math.pow(1+capLF,y+1);
     v+=num(P.optPrice)/Math.pow(1+capLF,oy);
@@ -1401,7 +1432,7 @@ function calcPositions(S,R){
   const rows=[];
   for(let y=0;y<nY;y++) rows.push({yr:S.startYear+y,noiPre:aNoiPre[y],gr:aGR[y],
     lh:aLH[y],ratio:aNoiPre[y]?aGR[y]/aNoiPre[y]:0});
-  return {rows,events,feeSimple,leasehold,leasedFee,lfBasis,
+  return {rows,events,...(timingIssues.length?{timingIssues}:{}),feeSimple,leasehold,leasedFee,lfBasis,
     sum:leasedFee+leasehold, gap:(leasedFee+leasehold)-feeSimple,
     grNoi:rows[0]?rows[0].ratio:0, maxRatio:rows.reduce((a,r)=>Math.max(a,r.ratio),0),
     lfFs:feeSimple?leasedFee/feeSimple:0,
@@ -1596,7 +1627,19 @@ function validateModel(S,R,onIssue){
       E("Rent roll",nm+" is set to a term length of zero","The lease has no expiry.", T("tenants",t,"termYears"));
   }
 
+  /* --- floating index units --- */
+  if(S.loanOn) for(const loan of debtLoans(S)) if(loan.rateType==="floating"){
+    try{
+      if(basisDebtCurveTokens(loan.curve).some(point=>!point.explicitPercent&&point.amount!==0&&Math.abs(point.amount)<1))
+        W("Debt",(loan.name||"Floating loan")+" has ambiguous fractional index rates",
+          "Unmarked fractions retain the legacy decimal-rate interpretation. Re-enter the curve as percentages to confirm the intended units (for example, 0.5% means one-half percent).",
+          T("loans",loan,"curve"));
+    }catch(error){ E("Debt",(loan.name||"Floating loan")+" has an invalid index curve",error.message,T("loans",loan,"curve")); }
+  }
+
   /* --- leased fee / leasehold --- */
+  for(const issue of positionYearIssues(S)) E("Ground lease",issue.message,
+    "The invalid timing assumption is not applied to the position comparison.",T("position",S.pos,issue.key));
   if((S.groundLeases||[]).length){
     const X=calcPositions(S,R);
     if(X){
@@ -1987,6 +2030,25 @@ function idxFactor(S,sr,i){ const o=idxParse(sr), k0=num(S.startYear)*12+(num(S.
   const a=idxLevel(o,k0), b=idxLevel(o,k0+12*y); return (a&&b)?b/a:1; }
 function legacyLoan(S){ return {name:"Loan",sizing:"ltv",ltv:num(S.ltv),rateType:"fixed",rate:num(S.rate),amortYears:num(S.amortYears),
   ioAll:!!S.ioOnly,ioMonths:0,feePct:num(S.loanFee),exitFeePct:0,start:"",termMonths:0,ffMax:0,ffPct:1,legacy:true}; }
+function basisDebtCurveTokens(value){
+  if(value===undefined||value===null||value==="") return [];
+  if(typeof value!=="string"&&typeof value!=="number") throw Error("Floating index curve must be a list of annual percentages.");
+  const text=String(value).trim(); if(!text) return [];
+  if(text.length>32000) throw Error("Floating index curve is too long.");
+  const parts=text.replace(/(\d)\s+%/g,"$1%").split(/[,;\s]+/).filter(Boolean);
+  if(parts.length>512) throw Error("Floating index curve contains too many annual rates.");
+  return parts.map(token=>{
+    if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?%?$/.test(token)) throw Error("Invalid floating index rate: "+token.slice(0,80)+". Enter percentages separated by commas, semicolons or spaces.");
+    const explicitPercent=token.endsWith("%"), amount=Number(explicitPercent?token.slice(0,-1):token);
+    if(!Number.isFinite(amount)) throw Error("Floating index rates must be finite numbers.");
+    return {amount,explicitPercent};
+  });
+}
+function basisNormalizeDebtCurve(value){
+  // Newly edited curve cells are labeled as percentages. Store that unit
+  // explicitly instead of guessing from whether the rate is below one.
+  return basisDebtCurveTokens(value).map(point=>String(point.amount)+"%").join("; ");
+}
 function debtLoans(S){ if(!S.loanOn) return []; return (S.loans&&S.loans.length)?S.loans.filter(l=>l.on!==false):[legacyLoan(S)]; }
 function debtPayoffAt(loans,i){ return loans.reduce((a,x)=>a+((i<x.start||i>x.maturity)?0:x.bal[i]*(1+x.xf)),0); }
 function buildDebt(S,nM,nY,basis,leaseCostM){
@@ -2001,7 +2063,8 @@ function buildDebt(S,nM,nY,basis,leaseCostM){
     const fee=amt*num(L.feePct), xf=num(L.exitFeePct);
     const x={name:L.name||"Loan",amount:amt,fee,start:s0,maturity:mat,xf,int:Z(),prin:Z(),ds:Z(),bal:Z(),draw:Z(),balloon:Z(),rate:Z(),
       rateType:L.rateType||"fixed",ioMonths:Math.round(num(L.ioMonths)||0),ioAll:!!L.ioAll,amortYears:num(L.amortYears),pmt0:null};
-    const curve=String(L.curve||"").split(/[,;\s]+/).filter(Boolean).map(v=>{ const n=parseFloat(v); return isFinite(n)?(Math.abs(n)>=1?n/100:n):0; });
+    const curve=L.rateType==="floating"?basisDebtCurveTokens(L.curve).map(point=>
+      point.explicitPercent||Math.abs(point.amount)>=1?point.amount/100:point.amount):[];
     const rateAt=i=>{ if(L.rateType!=="floating") return num(L.rate);
       const y=Math.floor(i/12), ix=curve.length?curve[Math.min(y,curve.length-1)]:0;
       let r=ix+num(L.spread); if(num(L.floor)>0) r=Math.max(r,num(L.floor)); if(num(L.cap)>0) r=Math.min(r,num(L.cap)); return r; };

@@ -15,7 +15,10 @@ function basisBuildReportPackage(model,result,context={}){
     const item={name,rows,widths};sheets.push(item);return item;
   };
   const fmt=(name,r,c,type)=>formats.push([name,r,c,type]);
-  const number=value=>value===undefined||value===null||value===''?0:Number(value);
+  // Native/legacy models may retain formatted numeric text. Normalize the same
+  // currency/grouping characters as the engine, but keep nonfinite or partial
+  // values invalid so report validation still rejects them.
+  const number=value=>value===undefined||value===null||value===''?0:Number(typeof value==='string'?value.replace(/[$,\s%]/g,''):value);
   const finiteOrBlank=value=>typeof value==='number'&&Number.isFinite(value)?value:null;
   const lookup=(key,id)=>(model[key]||[]).find(x=>x.id===id)?.name||id||'';
   const groups=t=>basisTenantGroupIds(t).map(id=>lookup('tgroups',id)).join('; ');

@@ -2,7 +2,7 @@
 
 Basis Studio is a browser application for commercial real-estate cash flow,
 valuation, portfolio scenarios, rent rolls and reviewed document extraction.
-The current version is **0.7.28, a beta candidate**.
+The current version is **0.7.29, a beta candidate**.
 
 The complete application and its development files are in [`Project/`](Project/).
 This update replaces the earlier v7.9 encoded upload with directly usable files.
@@ -66,7 +66,7 @@ configure Access.
 ## Status and license
 
 This repository contains a beta candidate, not a completed production release.
-See [v0.7.28 validation](Project/docs/VALIDATION_0_7_28.md), the
+See [v0.7.29 review and validation](Project/docs/CODE_REVIEW_0_7_29.md), the
 [acceptance checklist](Project/docs/BETA_ACCEPTANCE.md), and the
 [release checklist](Project/docs/RELEASE_CHECKLIST.md) for tested behavior and
 remaining live-host, AI-provider, Windows and analyst acceptance work.

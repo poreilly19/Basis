@@ -48,6 +48,56 @@ let passed=0;async function test(name,fn){try{await fn();passed++;console.log('P
   await test('Workspace NOI yield passes a ratio to the percent formatter',()=>{const formula=html.match(/Implied NOI yield[^\n]+?pc\(([^,]+),2\)/);assert.ok(formula);const value=vm.runInNewContext(formula[1],{sum:key=>key==='noi'?60000:1000000});assert.equal(value,0.06);});
   await test('A property load cannot reverse a portfolio selection made while its read is pending',async()=>{const {run}=setup();run(`PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A'});var release;pwLoadJson=()=>new Promise(r=>{release=r;});`);const pending=run(`pwOpen('a')`);run(`PW.pf='another';release(JSON.stringify({name:'A'}));`);await pending;assert.equal(run('PW.pf'),'another');assert.equal(run('PW.cur'),null);assert.equal(run('S.name'),'Active');});
   await test('A property load cannot reverse a scenario selection during the outgoing save',async()=>{const {run}=setup();run(`PW.cur='a';PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A'},{id:'b',pf:'pf',sc:'base',name:'B'});var release,reads=0;pwSaveCur=()=>new Promise(r=>{release=r;});pwLoadJson=async()=>{reads++;return JSON.stringify({name:'B'});};`);const pending=run(`pwOpen('b')`);run(`PW.sc='down';release();`);await pending;assert.equal(run('PW.sc'),'down');assert.equal(run('PW.cur'),'a');assert.equal(run('reads'),0);});
+  await test('A delayed background read cannot undo a newer saved edit after reopening the property',async()=>{
+    const {run}=setup();run(`PW.cur=PW.local.cur='a';PW.local.open=['a','b'];S={name:'A',areas:[],tenants:[],mlas:[]};
+      PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A',saved:1},{id:'b',pf:'pf',sc:'base',name:'Original B',saved:1});
+      PW.mem.set('pw_index',pwIxCopy());PW.rev=pwRevision(PW.ix);
+      PW.mem.set('pwm_a',{v:1,n:1,enc:'json',saved:1,s:JSON.stringify(S)});
+      PW.mem.set('pwm_b',{v:1,n:1,enc:'json',saved:1,s:JSON.stringify({name:'Original B',areas:[],tenants:[],mlas:[]})});
+      pwCacheSet('a',JSON.stringify(S));var firstRead=true,releaseRead,originalGetModel=pwGetModel;
+      pwGetModel=async function(id,...rest){const result=await originalGetModel(id,...rest);
+        if(id==='b'&&firstRead){firstRead=false;return new Promise(resolve=>{releaseRead=()=>resolve(result);});}return result;};`);
+    const background=run(`pwLoadJson('b')`);await new Promise(resolve=>setImmediate(resolve));
+    await run(`pwOpen('b')`);await run(`S.name='User edited B';pwSaveCur()`);await run(`pwOpen('a')`);
+    run('releaseRead()');assert.equal(JSON.parse(await background).name,'User edited B');
+    assert.equal(run(`JSON.parse(PW.cache.get('b')).name`),'User edited B');
+    assert.equal(run(`JSON.parse(PW.mem.get('pwm_b').s).name`),'User edited B');
+    await run(`pwOpen('b')`);assert.equal(run('S.name'),'User edited B');await run('pwSaveCur()');
+    assert.equal(run(`JSON.parse(PW.mem.get('pwm_b').s).name`),'User edited B');
+  });
+  await test('A property load rechecks the cache after the queued model publication completes',async()=>{
+    const {run}=setup();run(`PW.cur=PW.local.cur='b';S={name:'Queued current edit',areas:[],tenants:[],mlas:[]};
+      PW.ix.props.push({id:'b',pf:'pf',sc:'base',name:'Old B',saved:1});PW.mem.set('pw_index',pwIxCopy());PW.rev=pwRevision(PW.ix);
+      PW.mem.set('pwm_b',{v:1,n:1,enc:'json',saved:1,s:JSON.stringify({name:'Old B',areas:[],tenants:[],mlas:[]})});
+      var releaseCommit,reads=0,originalCommit=pwCommit,originalGetModel=pwGetModel;
+      pwCommit=async(...args)=>{await new Promise(resolve=>{releaseCommit=resolve;});return originalCommit(...args);};
+      pwGetModel=async(...args)=>{reads++;return originalGetModel(...args);};`);
+    const copying=run(`pwCopy(['b'],'pf','base',true)`);await new Promise(resolve=>setImmediate(resolve));
+    const loading=run(`pwLoadJson('b')`);run('releaseCommit()');await copying;
+    assert.equal(JSON.parse(await loading).name,'Queued current edit');assert.equal(run('reads'),0);
+  });
+  await test('A delayed read from a replaced backend cannot populate the new library cache',async()=>{
+    const {run}=setup();run(`PW.ix.props.push({id:'b',pf:'pf',sc:'base',name:'Original backend B',saved:1});
+      PW.mem.set('pw_index',pwIxCopy());PW.rev=pwRevision(PW.ix);
+      PW.mem.set('pwm_b',{v:1,n:1,enc:'json',saved:1,s:JSON.stringify({name:'Original backend B',areas:[],tenants:[],mlas:[]})});
+      var releaseRead,originalGetModel=pwGetModel;
+      pwGetModel=async(...args)=>{const result=await originalGetModel(...args);return new Promise(resolve=>{releaseRead=()=>resolve(result);});};`);
+    const loading=run(`pwLoadJson('b')`),rejected=assert.rejects(loading,/library changed while loading/);
+    await new Promise(resolve=>setImmediate(resolve));run(`PW.mem=new Map([['pw_index',pwIxCopy()],['pwm_b',
+      {v:1,n:1,enc:'json',saved:2,s:JSON.stringify({name:'New backend B',areas:[],tenants:[],mlas:[]})}]]);releaseRead();`);
+    await rejected;assert.equal(run(`PW.cache.has('b')`),false);
+    assert.equal(run(`JSON.parse(PW.mem.get('pwm_b').s).name`),'New backend B');
+  });
+  await test('A reinitialized library rejects a read started against the old index even at the same revision',async()=>{
+    const {run}=setup();run(`PW.ix.props.push({id:'b',pf:'pf',sc:'base',name:'Original B',saved:1});
+      PW.mem.set('pw_index',pwIxCopy());PW.rev=pwRevision(PW.ix);
+      PW.mem.set('pwm_b',{v:1,n:1,enc:'json',saved:1,s:JSON.stringify({name:'Original B',areas:[],tenants:[],mlas:[]})});
+      var releaseRead,originalGetModel=pwGetModel;
+      pwGetModel=async(...args)=>{const result=await originalGetModel(...args);return new Promise(resolve=>{releaseRead=()=>resolve(result);});};`);
+    const loading=run(`pwLoadJson('b')`),rejected=assert.rejects(loading,/library changed while loading/);
+    await new Promise(resolve=>setImmediate(resolve));run(`PW.ix=pwIxCopy();releaseRead();`);
+    await rejected;assert.equal(run(`PW.cache.has('b')`),false);assert.equal(run(`PW.local.synced.b`),undefined);
+  });
   await test('Closing the current tab chooses an adjacent tab only within the selected scenario',async()=>{const {run}=setup();run(`PW.cur='a';PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A'},{id:'hidden',pf:'pf',sc:'other',name:'Hidden'},{id:'b',pf:'pf',sc:'base',name:'B'});PW.local.open=['a','hidden','b'];pwSaveCur=async()=>{};pwCacheSet('b',JSON.stringify({name:'B'}));`);assert.equal(await run(`pwCloseTab('a')`),true);assert.equal(run('PW.cur'),'b');assert.equal(run('PW.sc'),'base');assert.equal(run('JSON.stringify(PW.local.open)'),JSON.stringify(['hidden','b']));assert.equal(run('PW.ix.props.length'),3);});
   await test('Closing the last visible tab saves and returns to Workspace instead of another scenario',async()=>{const {run}=setup();run(`PW.cur='a';PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A'},{id:'hidden',pf:'pf',sc:'other',name:'Hidden'});PW.local.open=['hidden','a'];var saved=0;pwSaveCur=async()=>{saved++;};setMode=m=>{MODE=m;};`);assert.equal(await run(`pwCloseTab('a')`),true);assert.equal(run('saved'),1);assert.equal(run('MODE'),'portfolio');assert.equal(run('PW.sc'),'base');assert.equal(run('JSON.stringify(PW.local.open)'),JSON.stringify(['hidden']));});
   await test('A failed last-tab save preserves its membership and active model',async()=>{const {run}=setup();run(`PW.cur='a';PW.local.open=['a'];PW.ix.props.push({id:'a',pf:'pf',sc:'base',name:'A'});S.name='Unsaved';pwSaveCur=async()=>{throw Error('full disk')};`);assert.equal(await run(`pwCloseTab('a')`),false);assert.equal(run('PW.local.open[0]'),'a');assert.equal(run('PW.cur'),'a');assert.equal(run('S.name'),'Unsaved');});

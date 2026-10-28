@@ -99,4 +99,14 @@ class IntakeQualityBrowserTests(unittest.TestCase):
         field=review.get_by_label('Correct Area (SF)',exact=True);field.fill('2000');field.press('Tab')
         expect(review).to_contain_text('$24,000/year');self.apply();self.assertEqual(self.page.evaluate('[S.tenants[0].sf,S.tenants[0].rent]'),[2000,12])
 
+    def test_unknown_recovery_keeps_correction_controls_and_blocks_apply_until_reviewed(self):
+        docs=copy.deepcopy(FIXTURE['documents'][:1]);docs[0]['results'][0]['tenants'][0]['recovery']={'type':'unsupported'}
+        self.seed(docs);include=self.page.locator('input[aria-label^="Include t:"]');expect(include).not_to_be_checked()
+        before=self.page.evaluate('S.tenants[0].rec');include.check()
+        review=self.page.get_by_role('region',name='Review Tenant Fields');expect(review.locator('[data-review-field="rec"]')).to_be_visible()
+        expect(self.page.get_by_role('button',name='Apply selected',exact=True)).to_be_disabled()
+        review.get_by_label('Decision for Recoveries',exact=True).select_option('keep')
+        expect(self.page.get_by_role('button',name='Apply selected',exact=True)).to_be_enabled();self.apply()
+        self.assertEqual(self.page.evaluate('S.tenants[0].rec'),before)
+
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -1,4 +1,9 @@
-# Basis Studio — reviewed Codex handoff (v7.28 beta candidate)
+# Basis Studio — reviewed Codex handoff (v7.29 beta candidate)
+
+Version **0.7.29** addresses confirmed financial, storage, document Apply and
+workbook interoperability bugs. See the [extensive review and validation](docs/CODE_REVIEW_0_7_29.md)
+for reproductions and affected calculations. Recheck models that use the corrected
+budget, floating-debt or ownership-position paths after upgrading.
 
 Version 7.28 uses neutral workbook terminology throughout the application and
 distributed files. Use **Workbook Import / Export** for supported XL4ADW input

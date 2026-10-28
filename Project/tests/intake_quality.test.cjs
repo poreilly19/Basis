@@ -187,3 +187,133 @@ test('an unknown expense recovery flag preserves the existing setting, while an 
   assert.equal(run("picks['e:'+X.expenses[0].key]"),true);assert.equal(run('prepare().model.ops[0].recov'),true);assert.equal(run('prepare().model.ops[0].amt'),2400);
   run('X.expenses[0].r.recov=false');assert.equal(run('prepare().model.ops[0].recov'),false);
 });
+
+test('capital is placed in its fiscal analysis year rather than its calendar year',()=>{
+  const run=setup();run(`S.startMonth=4;X=intMerge([{id:'cap',name:'Capital plan',pages:[],results:[{docType:'budget',capital:[{name:'Roof',amount:12000,date:'2027-01-01'}]}]}]);picks=intDefaultPicks(X)`);
+  const result=run('prepare()');assert.equal(result.model.caps[0].amtYears,'12000; 0');
+  near(run('calc(prepare().model).ann.cap[0]'),12000);near(run('calc(prepare().model).ann.cap[1]'),0);
+  assert.equal(result.model.caps[0].timing,'Jan');const monthly=run('Array.from(calc(prepare().model).monthly.cap).slice(0,12)');
+  monthly.forEach((amount,index)=>near(amount,index===9?12000:0));
+});
+test('selected analysis start controls imported capital and future tenant costs together',()=>{
+  const run=setup();run(`X=intMerge([{id:'cap',name:'Capital plan',pages:[],results:[{docType:'budget',capital:[{name:'Roof',amount:12000,date:'2031-01-01'}],valuation:{analysisStart:'2030-04-01'}}]}]);picks=intDefaultPicks(X);picks['v:analysisStart']=true`);
+  const result=run('prepare()');assert.deepEqual([result.model.startYear,result.model.startMonth],[2030,4]);assert.equal(result.model.caps[0].amtYears,'12000; 0');
+  near(run('calc(prepare().model).ann.cap[0]'),12000);
+});
+test('capital outside the hold is retained in its actual year and missing dates are disclosed',()=>{
+  const run=setup();run(`S.startMonth=4;X=intMerge([{id:'cap',name:'Capital plan',pages:[],results:[{docType:'budget',capital:[{name:'Future Roof',amount:12000,date:'2030-04-01'},{name:'Undated',amount:5000},{name:'Earlier',amount:1000,date:'2026-03-31'}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run("picks['c:'+X.capital.find(c=>c.name==='Undated').key]"),false);run("picks['c:'+X.capital.find(c=>c.name==='Undated').key]=true");
+  const result=run('prepare()');assert.equal(result.model.caps.length,1);assert.equal(result.model.caps[0].amtYears,'0; 0; 0; 0; 12000; 0');
+  assert.ok(result.applied.notes.some(n=>n.includes('after the current hold')));assert.ok(result.applied.notes.some(n=>n.includes('date is missing or invalid')));assert.ok(result.applied.notes.some(n=>n.includes('dated before')));
+  near(run('calc(prepare().model).ann.cap[0]'),0);near(run('calc(prepare().model).ann.cap[1]'),0);
+});
+test('partial profile grants preserve renewal terms, inflation overrides and source categories',()=>{
+  const run=setup();run(`S.tis=[{id:'ti',name:'Existing TI',newPSF:10,renewPSF:5,infl:null,inflRef:'lcst',newInflRef:'gen',renewInflRef:'mkt'}];S.lcs=[{id:'lc',name:'Existing LC',newPct:.05,renewPct:.025,basis:'pct',infl:null,inflRef:'lcst'}];S.frees=[{id:'free',name:'Existing Free',newMo:4,renewMo:2}];Object.assign(S.mlas[0],{tiRef:'ti',lcRef:'lc',frRef:'free'});const originalTerms=JSON.stringify([S.tis,S.lcs,S.frees]);X=intMerge([{id:'terms',name:'Terms',pages:[],results:[{docType:'appraisal',market:{profiles:[{name:S.mlas[0].name,tiNewPSF:0,lcNewPct:0,freeRentNew:0}]}}]}]);picks=intDefaultPicks(X)`);
+  const model=run('prepare().model'),profile=model.mlas[0],ti=model.tis.find(x=>x.id===profile.tiRef),lc=model.lcs.find(x=>x.id===profile.lcRef),fr=model.frees.find(x=>x.id===profile.frRef);
+  assert.deepEqual([ti.newPSF,ti.renewPSF,lc.newPct,lc.renewPct,fr.newMo,fr.renewMo],[0,5,0,.025,0,2]);
+  assert.deepEqual([ti.inflRef,ti.newInflRef,ti.renewInflRef,lc.inflRef],['lcst','gen','mkt','lcst']);assert.equal(run('JSON.stringify([S.tis,S.lcs,S.frees])'),run('originalTerms'));
+});
+test('partial profile grants retain local fallback values when no category is attached',()=>{
+  const run=setup();run(`Object.assign(S.mlas[0],{tiRef:'',lcRef:'',frRef:'',tiNewLocal:20,tiRenewLocal:7,lcNewLocal:.04,lcRenewLocal:.02,lcBasisLocal:'pct',frNewLocal:3,frRenewLocal:1});X=intMerge([{id:'terms',name:'Terms',pages:[],results:[{docType:'appraisal',market:{profiles:[{name:S.mlas[0].name,tiRenewPSF:0,lcRenewPct:0,freeRentRenew:0}]}}]}]);picks=intDefaultPicks(X)`);
+  const resolved=run('(()=>{const model=prepare().model;return resolveMLA(model.mlas[0],model)})()');assert.deepEqual([resolved.tiNew,resolved.tiRenew,resolved.lcNew,resolved.lcRenew,resolved.frNew,resolved.frRenew],[20,0,.04,0,3,0]);
+});
+test('a partial percentage commission cannot erase the other side of a per-SF category',()=>{
+  const run=setup();run(`S.lcs=[{id:'lc',name:'Per-SF LC',basis:'psf',newPct:5,renewPct:3,infl:null}];S.mlas[0].lcRef='lc';X=intMerge([{id:'terms',name:'Terms',pages:[],results:[{docType:'appraisal',market:{profiles:[{name:S.mlas[0].name,lcNewPct:.05}]}}]}]);picks=intDefaultPicks(X)`);
+  const result=run('prepare()');assert.equal(result.model.mlas[0].lcRef,'lc');assert.ok(result.applied.notes.some(n=>n.includes('partial percentage commission')));
+  run('X.profiles[0].lcRenewPct=.02');const resolved=run('(()=>{const model=prepare().model;return resolveMLA(model.mlas[0],model)})()');assert.deepEqual([resolved.lcBasis,resolved.lcNew,resolved.lcRenew],['pct',.05,.02]);
+});
+test('imported annual market rent stays annual for every previous profile rent unit',()=>{
+  for(const unit of ['psfmo','yramt','moamt']){const run=setup();run(`S.mlas[0].rentUnit='${unit}';X=intMerge([{id:'terms',name:'Terms',pages:[],results:[{docType:'appraisal',market:{profiles:[{name:S.mlas[0].name,marketRentPSF:24}]}}]}]);picks=intDefaultPicks(X)`);
+    const model=run('prepare().model'),profile=model.mlas[0];assert.equal(profile.rentUnit,'psfyr');assert.equal(profile.mrNewRef,'');assert.equal(profile.mrRenewRef,'');near(run('resolveMLA(prepare().model.mlas[0],prepare().model).mktNew'),24);
+  }
+});
+test('plain imported recoveries do not inherit a custom pool or occupied-area denominator',()=>{
+  const run=setup();run(`S.ops=[{id:'tax',name:'Taxes',amt:1200,basis:'amt',recov:true,fixedPct:1,infl:0,group:'taxes'},{id:'insurance',name:'Insurance',amt:2400,basis:'amt',recov:true,fixedPct:1,infl:0}];S.recs=[{id:'custom',name:'Tax-only Net',method:'NNN',denom:'occupied',adminFee:0,grossUp:1,fixed:0,pool:'taxes'}];X=intMerge([{id:'lease',name:'Lease',pages:[],results:[{docType:'lease',tenants:[{name:'North Labs LLC',suite:'100',sf:1000,start:'2026-01-01',end:'2030-12-31',recovery:{type:'nnn',grossUpPct:1,adminFeePct:0}}]}]}]);picks=intDefaultPicks(X)`);
+  const model=run('prepare().model'),rec=model.recs.find(x=>x.id===model.tenants[0].rec);assert.notEqual(rec.id,'custom');assert.equal(rec.pool,'');assert.equal(rec.denom,'rentable');near(run('calc(prepare().model).ann.reimb[0]'),3600);
+});
+test('an unstated gross-up uses the importer default instead of reusing another threshold',()=>{
+  const run=setup();run(`S.recs=[{id:'half',name:'Different threshold',method:'NNN',denom:'rentable',adminFee:0,grossUp:.5,fixed:0,pool:''}];X=intMerge([{id:'lease',name:'Lease',pages:[],results:[{docType:'lease',tenants:[{name:'North Labs LLC',suite:'100',recovery:{type:'nnn',adminFeePct:0}}]}]}]);picks=intDefaultPicks(X)`);
+  const model=run('prepare().model'),rec=model.recs.find(x=>x.id===model.tenants[0].rec);assert.notEqual(rec.id,'half');assert.equal(rec.grossUp,1);
+});
+test('strict extraction numbers retain exponent signs, accounting negatives and complete grouping',()=>{
+  const run=setup();for(const [text,expected]of [['1e-3',.001],['-1e-3',-.001],['1.2e+3',1200],['($1,200.50)',-1200.5],['-$1,200.50',-1200.5],['$-1,200.50',-1200.5],['0',0]])near(run(`iN(${JSON.stringify(text)})`),expected);
+  for(const value of ['1,2','1200 square feet','50%','1-2','($-12)','$1.2.3',true,[],{}])assert.equal(run(`iN(${JSON.stringify(value)})`),null);
+  for(const [text,expected]of [['3%',.03],['(3%)',-.03],['250%',2.5],['1e-3',.001],['0.5%',.005]])near(run(`iP(${JSON.stringify(text)})`),expected);
+  assert.equal(run("iP('$3%')"),null);
+});
+test('malformed area and money percentages are withheld with source-specific review warnings',()=>{
+  const run=setup();run(`docs.splice(1);docs[0].results[0].tenants[0].sf='1,2';X=intMerge(docs);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.tenants[0].r.sf'),null);assert.equal(run('picks["t:"+X.tenants[0].key]'),false);assert.ok(run('X.warnings.some(w=>w.text.includes("unsupported numeric text"))'));
+  run(`X=intMerge([{id:'debt',name:'Loan terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Bad amount',amount:'50%',rate:'6%'}]}]}])`);assert.equal(run('X.debt.length'),0);assert.ok(run('X.warnings.some(w=>w.text.includes("debt terms were not proposed"))'));
+});
+test('valid scientific loan principal and percentage rate remain exact without mutating extraction',()=>{
+  const run=setup();run(`const source=[{id:'debt',name:'Loan terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Loan',amount:'1e6',rate:'6%',amortYears:30,ioMonths:0,termMonths:60,feePct:0}]}]}];const raw=JSON.stringify(source[0].results);X=intMerge(source);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.debt[0].amount'),1000000);near(run('X.debt[0].rate'),.06);assert.equal(run('JSON.stringify(source[0].results)'),run('raw'));
+});
+test('a percentage escalation is normalized once and malformed rules retain current rent',()=>{
+  const run=setup();run(`docs.splice(1);docs[0].results[0].tenants[0].escalation={type:'pct',value:'3%'};X=intMerge(docs);picks=intDefaultPicks(X)`);near(run('prepare().model.tenants[0].step'),.03);
+  run(`docs[0].results[0].tenants[0].escalation.value='1,2%';X=intMerge(docs);picks=intDefaultPicks(X);picks['t:'+X.tenants[0].key]=true`);assert.equal(run('prepare().model.tenants[0].rent'),10);assert.ok(run('prepare().applied.notes.some(n=>n.includes("rent terms were not applied"))'));
+});
+
+test('same-caption expense details from one file cannot silently collapse into one applied cost',()=>{
+  const run=setup();run(`const statement={id:'pnl',name:'Operating statement',pages:[],results:[{docType:'operating_statement',reporting:{months:12},expenses:[{name:'Insurance',amount:1200,months:12,basis:'total',recoverable:false},{name:'Insurance',amount:600,months:12,basis:'total',recoverable:false}],totals:{scope:'document',totalOperatingExpenses:1800}}]};X=intMerge([statement]);picks=intDefaultPicks(X)`);
+  assert.equal(run("basisIntakeDocumentChecks([statement]).find(c=>c.metric==='totalOperatingExpenses').status"),'match');assert.equal(run('X.expenses[0].r.ambiguousRows'),true);assert.equal(run("picks['e:'+X.expenses[0].key]"),false);assert.equal(run('prepare().model.ops.length'),0);
+  run("picks['e:'+X.expenses[0].key]=true");const before=run('JSON.stringify(S)');assert.throws(()=>run('prepare()'),/same-file expense rows need review/);assert.equal(run('JSON.stringify(S)'),before);
+});
+test('cross-document expense corroboration preserves priority without creating duplicate rows',()=>{
+  const run=setup();run(`X=intMerge([{id:'low',name:'OM',pages:[],results:[{docType:'offering_memorandum',expenses:[{name:'Insurance',amount:1200,months:12,basis:'total',recoverable:false}]}]},{id:'high',name:'Budget',pages:[],results:[{docType:'budget',expenses:[{name:'Insurance',amount:1800,months:12,basis:'total',recoverable:false}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.expenses.length'),1);assert.equal(run('X.expenses[0].r.ambiguousRows'),false);assert.equal(run('prepare().model.ops[0].amt'),1800);
+});
+test('an exact repeated expense tied to the same source page and quote remains one reading',()=>{
+  const run=setup();run(`const detail={name:'Insurance',amount:1200,months:12,basis:'total',recoverable:false,src:{page:1,quote:'Annual insurance premium is $1,200.'}};X=intMerge([{id:'pnl',name:'Statement',pages:[{n:1,text:'Annual insurance premium is $1,200.'}],results:[{docType:'operating_statement',expenses:[detail,JSON.parse(JSON.stringify(detail))]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.expenses[0].c.length'),1);assert.equal(run('X.expenses[0].r.ambiguousRows'),false);assert.equal(run('prepare().model.ops[0].amt'),1200);
+});
+test('a principal-only loan is unchecked and cannot invent rate, amortization or fees on Apply',()=>{
+  const run=setup();run(`X=intMerge([{id:'debt',name:'Loan terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Incomplete Loan',amount:100000}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run("picks['d:'+X.debt[0].key]"),false);assert.equal(run('(prepare().model.loans||[]).length'),0);assert.ok(run('X.warnings.some(w=>w.text.includes("loan proposal is unchecked"))'));
+  const before=run('JSON.stringify(S)');run("picks['d:'+X.debt[0].key]=true");assert.throws(()=>run('prepare()'),/loan was not applied.*fixed interest rate/);assert.equal(run('JSON.stringify(S)'),before);
+});
+test('explicit zero-rate interest-only financing retains zero amortization and fees',()=>{
+  const run=setup();run(`X=intMerge([{id:'debt',name:'Loan terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Zero Loan',amount:100000,floating:false,rate:0,amortYears:0,ioMonths:0,termMonths:24,feePct:0}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run("picks['d:'+X.debt[0].key]"),true);const loan=run('prepare().model.loans[0]');assert.deepEqual([loan.rate,loan.amortYears,loan.feePct],[0,0,0]);near(run('calc(prepare().model).intM[0]'),0);
+});
+test('a floating loan without an explicit index curve remains a manual-review proposal',()=>{
+  const run=setup();run(`X=intMerge([{id:'debt',name:'Loan terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Floating Loan',amount:100000,floating:true,index:'SOFR',spread:.025,floor:0,amortYears:30,ioMonths:0,termMonths:60,feePct:0}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run("picks['d:'+X.debt[0].key]"),false);run("picks['d:'+X.debt[0].key]=true");assert.throws(()=>run('prepare()'),/explicit floating index curve/);
+});
+test('an incomplete renewal option cannot invent a five-year term or market rent',()=>{
+  const run=setup();run(`Object.assign(S.tenants[0],{optTermYears:3,optTermMonths:0,optRentBasis:'psf',optRentAmt:18});docs.splice(1);docs[0].results[0].tenants[0].renewalOptions=[{count:1}];X=intMerge(docs);picks=intDefaultPicks(X)`);
+  assert.equal(run("picks['t:'+X.tenants[0].key]"),false);run("picks['t:'+X.tenants[0].key]=true");const result=run('prepare()'),tenant=result.model.tenants[0];assert.deepEqual([tenant.optTermYears,tenant.optRentBasis,tenant.optRentAmt],[3,'psf',18]);assert.ok(result.applied.notes.some(n=>n.includes('renewal option terms were not applied')));
+});
+test('an explicit zero fixed option rent remains zero instead of switching to market rent',()=>{
+  const run=setup();run(`docs.splice(1);docs[0].results[0].tenants[0].renewalOptions=[{count:1,termYears:3,rent:'fixed_psf',value:0}];X=intMerge(docs);picks=intDefaultPicks(X)`);
+  const tenant=run('prepare().model.tenants[0]');assert.deepEqual([tenant.optTermYears,tenant.optRentBasis,tenant.optRentAmt],[3,'psf',0]);
+});
+
+test('equal-cost capital projects in different years remain separate dated projects',()=>{
+  const run=setup();run(`S.years=5;X=intMerge([{id:'capital',name:'Plan',pages:[],results:[{docType:'budget',capital:[{name:'Roof',amount:12000,date:'2027-01-01'},{name:'Roof',amount:12000,date:'2030-01-01'}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.capital.length'),2);assert.equal(run('prepare().model.caps.length'),2);const annual=run('calc(prepare().model).ann.cap');near(annual[1],12000);near(annual[4],12000);near(annual[0],0);
+});
+test('negative amortization years and fractional or negative loan months cannot be applied',()=>{
+  for(const patch of [{amortYears:-30},{ioMonths:-1},{termMonths:-60},{ioMonths:1.5},{termMonths:60.5}]){
+    const run=setup();run(`X=intMerge([{id:'debt',name:'Terms',pages:[],results:[{docType:'loan_terms',debt:[{name:'Invalid loan',amount:100000,floating:false,rate:.06,amortYears:30,ioMonths:0,termMonths:60,feePct:0,...${JSON.stringify(patch)}}]}]}]);picks=intDefaultPicks(X)`);
+    assert.equal(run("picks['d:'+X.debt[0].key]"),false);run("picks['d:'+X.debt[0].key]=true");assert.throws(()=>run('prepare()'),/loan was not applied.*nonnegative/);
+  }
+});
+test('an unknown recovery type cannot become net recoveries and can be explicitly kept or corrected',()=>{
+  const run=setup();run(`docs.splice(1);docs[0].results[0].tenants[0].recovery={type:'unsupported'};X=intMerge(docs);picks=intDefaultPicks(X);const k=X.tenants[0].key;const currentRecovery=S.tenants[0].rec`);
+  assert.equal(run("picks['t:'+k]"),false);run("picks['t:'+k]=true");const result=run('prepare()');assert.equal(result.model.tenants[0].rec,run('currentRecovery'));assert.ok(result.tenantReviews[0].amendedGroups.includes('rec'));
+  assert.throws(()=>run('basisRequireAmendments(prepare())'),/unsupported recovery type/);
+  const kept=run("prepare({[k]:{rec:{mode:'keep'}}})");assert.equal(kept.blocked.length,0);assert.equal(kept.model.tenants[0].rec,run('currentRecovery'));
+  const corrected=run("prepare({[k]:{rec:{mode:'edit',values:{rec:S.recs[0].id}}}})");assert.equal(corrected.blocked.length,0);assert.equal(corrected.model.tenants[0].rec,run('S.recs[0].id'));
+});
+test('multiple existing same-name expense targets require an explicit valid correction',()=>{
+  const run=setup();run(`S.ops=[{id:'a',name:'Insurance',amt:1000,basis:'amt',recov:false,fixedPct:1,infl:0},{id:'b',name:'Insurance',amt:500,basis:'amt',recov:false,fixedPct:1,infl:0}];X=intMerge([{id:'budget',name:'Budget',pages:[],results:[{docType:'budget',expenses:[{name:'Insurance',amount:1800,basis:'total',months:12,recoverable:false}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.expenses[0].r.ambiguousTargets'),true);assert.equal(run("picks['e:'+X.expenses[0].key]"),false);run("picks['e:'+X.expenses[0].key]=true");const before=run('JSON.stringify(S)');assert.throws(()=>run('prepare()'),/several existing expense lines match/);assert.equal(run('JSON.stringify(S)'),before);
+  run("X.expenses[0].r.match='b'");assert.deepEqual(clone(run('prepare().model.ops.map(o=>[o.id,o.amt])')),[['a',1000],['b',1800]]);
+  run("X.expenses[0].r.match='not-a-candidate'");assert.throws(()=>run('prepare()'),/valid explicit target/);
+});
+test('multiple fuzzy expense targets are held without overriding an exact unique match',()=>{
+  const run=setup();run(`S.ops=[{id:'a',name:'Common Area Maintenance East',amt:1000,basis:'amt',recov:false,fixedPct:1,infl:0},{id:'b',name:'Common Area Maintenance West',amt:500,basis:'amt',recov:false,fixedPct:1,infl:0}];X=intMerge([{id:'budget',name:'Budget',pages:[],results:[{docType:'budget',expenses:[{name:'Common Area Maintenance',amount:1800,basis:'total',months:12,recoverable:false}]}]}]);picks=intDefaultPicks(X)`);
+  assert.equal(run('X.expenses[0].r.ambiguousTargets'),true);run("S.ops.push({id:'exact',name:'Common Area Maintenance',amt:0,basis:'amt',recov:false,fixedPct:1,infl:0});X=intMerge([{id:'budget',name:'Budget',pages:[],results:[{docType:'budget',expenses:[{name:'Common Area Maintenance',amount:1800,basis:'total',months:12,recoverable:false}]}]}]);picks=intDefaultPicks(X)");assert.equal(run('X.expenses[0].r.match'),'exact');assert.equal(run('X.expenses[0].r.ambiguousTargets'),false);assert.equal(run('prepare().model.ops.find(o=>o.id===\'exact\').amt'),1800);
+});

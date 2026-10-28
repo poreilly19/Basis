@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.29 — 2026-10-28 extensive bug review
+
+- Prevent late background reads from replacing newer saved models. Keep copied and recalculated workspace metrics consistent with the exact model snapshot, including atomic manual-save behavior and recoverable failures.
+- Correct budget-only lower-line overrides, sparse actual/budget vacancy treatment, position capital and ground-rent accounting, explicit zero growth and bounded reset timing. Add independent financial vectors and preserve historical parity fingerprints with narrowly audited corrections.
+- Interpret explicit floating index percentages correctly and save newly entered curves with percent units. Preserve valid legacy interpretations with a visible review warning; reject malformed inputs.
+- Correct fiscal and monthly capital timing, partial market-profile updates, annual market-rent units and plain recovery reuse in document Apply. Hold ambiguous or incomplete financial proposals for review instead of inventing terms or silently combining rows.
+- Preserve valid workbook XML variants, worksheet compatibility metadata and numeric precision. Correct exponent parsing and formatted-number report exports. Bound document reads and ensure timed-out PDF work is cleaned up.
+- See [the detailed review](docs/CODE_REVIEW_0_7_29.md) for reproductions, intentional numerical differences, verification and remaining acceptance limits.
+
 ## 2026-10-28 — MIT license
 
 - Add the owner-selected MIT license for the original Basis code, include it in source and deployment packages, and update current license documentation. Keep third-party Apache 2.0 notices and the separate provenance and release reviews. Application calculations and model format are unchanged.

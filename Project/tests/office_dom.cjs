@@ -9,6 +9,20 @@ class Element {
   }
   get textContent(){return this.childNodes.map(n=>typeof n==='string'?n:n.textContent).join('');}
   getAttribute(name){return Object.hasOwn(this.attrs,name)?this.attrs[name]:null;}
+  setAttribute(name,value){this.attrs[name]=String(value);}
+  replaceChild(replacement,old){
+    const at=this.childNodes.indexOf(old);if(at<0)throw Error('Missing child');
+    this.childNodes[at]=replacement;replacement.parentNode=this;old.parentNode=null;
+    this.children=this.childNodes.filter(node=>typeof node!=='string');return old;
+  }
+  appendChild(child){
+    if(typeof child!=='string'){if(child.parentNode)child.parentNode.removeChild(child);child.parentNode=this;this.children.push(child);}
+    this.childNodes.push(child);return child;
+  }
+  removeChild(old){
+    const at=this.childNodes.indexOf(old);if(at<0)throw Error('Missing child');
+    this.childNodes.splice(at,1);if(typeof old!=='string')old.parentNode=null;this.children=this.childNodes.filter(node=>typeof node!=='string');return old;
+  }
   getAttributeNS(namespace,name){
     for(const [key,value] of Object.entries(this.attrs)){
       const at=key.indexOf(':');
@@ -27,6 +41,11 @@ class Element {
 }
 class Document extends Element {
   constructor(){super('#document',Object.create(null),Object.create(null),null);this.documentElement=null;}
+  importNode(node,deep=false){
+    const clone=new Element(node.qualifiedName,{...node.attrs},{...node.namespaces},null);
+    if(deep)for(const child of node.childNodes){const copy=typeof child==='string'?child:this.importNode(child,true);clone.childNodes.push(copy);if(typeof copy!=='string'){copy.parentNode=clone;clone.children.push(copy);}}
+    return clone;
+  }
 }
 const namePattern=/^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 function decode(text){
@@ -83,4 +102,21 @@ class DOMParser {
     try{return parse(xml);}catch(_error){const doc=new Document(),error=new Element('parsererror',{}, {},doc);doc.documentElement=error;doc.children.push(error);doc.childNodes.push(error);return doc;}
   }
 }
-module.exports={DOMParser};
+class XMLSerializer {
+  serializeToString(node){
+    const escape=text=>String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const serialize=(element,inherited={})=>{
+      if(typeof element==='string')return escape(element);
+      if(element instanceof Document)return element.childNodes.map(child=>serialize(child,inherited)).join('');
+      const attrs={...element.attrs},namespaces={...inherited};
+      for(const [name,value] of Object.entries(attrs))if(name==='xmlns')namespaces['']=value;else if(name.startsWith('xmlns:'))namespaces[name.slice(6)]=value;
+      const requireNamespace=prefix=>{const value=element.namespaces[prefix]||'';if(value!==namespaces[prefix]&&value){attrs[prefix?'xmlns:'+prefix:'xmlns']=value;namespaces[prefix]=value;}};
+      requireNamespace(element.qualifiedName.includes(':')?element.qualifiedName.split(':')[0]:'');
+      for(const name of Object.keys(attrs))if(name.includes(':')&&!name.startsWith('xmlns:')&&!name.startsWith('xml:'))requireNamespace(name.split(':')[0]);
+      const attributes=Object.entries(attrs).map(([name,value])=>' '+name+'="'+escape(value).replace(/"/g,'&quot;')+'"').join('');
+      return '<'+element.qualifiedName+attributes+(element.childNodes.length?'>'+element.childNodes.map(child=>serialize(child,namespaces)).join('')+'</'+element.qualifiedName+'>':'/>');
+    };
+    return serialize(node);
+  }
+}
+module.exports={DOMParser,XMLSerializer};

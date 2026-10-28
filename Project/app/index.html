@@ -1823,16 +1823,17 @@ function calc(S){
   const ACT=new Map(), BUD=new Map(), aBase=num(S.startYear)*12+(num(S.startMonth)||1)-1;
   if(actK>=0) for(const a of (S.actuals||[])) if(a&&a.line){ const mp=atlParse(a.data); if(mp.size) ACT.set(a.line,mp); }
   if(budK>actK) for(const b of (S.budgets||[])) if(b&&b.line){ const mp=atlParse(b.data); if(mp.size) BUD.set(b.line,mp); }
-  const applyAct=(key,arr,also)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
-    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; } } };
+  const revenueOverrideMonths=new Set();
+  const applyAct=(key,arr,also,revenue=false)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
+    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; if(revenue) revenueOverrideMonths.add(i); } } };
   if(ACT.size||BUD.size){
-    applyAct("rent",sched,[gpr,tpgr,egr]); applyAct("reimb",reimb,[tpgr,egr]); applyAct("cpi",cpiRev,[tpgr,egr]); applyAct("pr",prM,[tpgr,egr]);
+    applyAct("rent",sched,[gpr,tpgr,egr],true); applyAct("reimb",reimb,[tpgr,egr],true); applyAct("cpi",cpiRev,[tpgr,egr],true); applyAct("pr",prM,[tpgr,egr],true);
     [[miscL,miscT,S.misc,"misc"],[parkL,parkT,S.parking,"park"],[storL,storT,S.storage,"stor"]].forEach(([LL,T,src,k])=>LL.forEach((x,j)=>{
-      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr]); }));
+      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr],!d.refOnly); }));
     for(const x of opLines) if(x.def.id) applyAct("op:"+x.def.id,x.m,x.def.refOnly?[]:[opTot]);
-    const revK=/^(rent|reimb|cpi|pr|misc|park|stor)/;   // months carried by revenue actuals or budgets have no general vacancy or credit loss
-    for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]) if(S.actNoVac!==false&&[...MP.keys()].some(k=>revK.test(k)))
-      for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
+    // Only supplied, cash-flow revenue values are already net of vacancy/loss.
+    // Missing forecast months and reference-only lines keep their existing policy.
+    if(S.actNoVac!==false) for(const i of revenueOverrideMonths){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
   }
   const noi=Z(); for(let i=0;i<nM;i++) noi[i]=egr[i]-opTot[i];
 
@@ -1853,7 +1854,7 @@ function calc(S){
   const leasing=Z(),cfbds=Z();
   for(const [LL,T] of [[capLines,capTot],[nonLines,nonTot]]) for(const x of LL){ const nv=paySpreadLine(S,x.m,x.def); if(!nv) continue;
     if(!(x.def&&x.def.refOnly)) for(let i=0;i<nM;i++) T[i]+=nv[i]-x.m[i]; x.m.set(nv); }
-  if(ACT.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
+  if(ACT.size||BUD.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
     capLines.forEach(x=>{ if(x.def.id) applyAct("cap:"+x.def.id,x.m,x.def.refOnly?[]:[capTot]); }); nonLines.forEach(x=>{ if(x.def.id) applyAct("non:"+x.def.id,x.m,x.def.refOnly?[]:[nonTot]); }); }
   const LINEM={rent:sched,reimb,cpi:cpiRev,pr:prM,ti:tiM,lc:lcM};
   for(const [LL,k] of [[opLines,"op"],[capLines,"cap"],[nonLines,"non"]]) LL.forEach(x=>{ if(x.def.id) LINEM[k+":"+x.def.id]=x.m; });
@@ -1933,6 +1934,19 @@ function calc(S){
    return premium and an exit cap 25-50bp wide of fee simple, while the leased fee is a
    bond-like stream capped at its own rate. The deck's warning that "A + B does not always
    equal C" is the point of the comparison, not a rounding error to be reconciled away. */
+function positionYearIssues(S){
+  const P=S.pos||{}, issues=[];
+  const whole=(key,label,allowEmpty)=>{
+    const raw=P[key], empty=raw===undefined||raw===null||typeof raw==="string"&&raw.trim()==="";
+    const n=typeof raw==="number"?raw:typeof raw==="string"&&raw.trim()!==""?Number(raw):NaN;
+    if(allowEmpty&&(empty||n===0)) return;
+    if(!Number.isFinite(n)||!Number.isInteger(n)||n<=0) issues.push({key,message:label+" must be a positive whole number of years."});
+  };
+  if(P.resetOn){ whole("resetFirst","First ground-rent reset",true); whole("resetEvery","Ground-rent reset interval",true); }
+  if(P.cpiOn) whole("cpiEvery","CPI catch-up interval",true);
+  if(P.optOn) whole("optYear","Ground-lease purchase-option year",false);
+  return issues;
+}
 function calcPositions(S,R){
   if(!R) return null;
   const P=S.pos||{}, nM=R.nM, nY=R.nY, sf=R.sf||1, A=R.ann;
@@ -1943,21 +1957,30 @@ function calcPositions(S,R){
   const baseGR=gr.slice();
   // NOI before ground rent — what both positions are really carved out of
   const noiPre=Z();
-  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+gr[i];
+  // Non-operating ground rent is already below NOI; only add back the portion
+  // actually deducted when arriving at NOI.
+  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+(R.glOpM?R.glOpM[i]:0);
 
   /* FMV reset: ground rent is re-struck as a percentage of land value, usually with a
      cap, because an uncapped reset is the clause that cost Lever House its leasehold. */
   const resetYrs=[];
-  if(P.resetOn&&num(P.resetEvery)>0)
-    for(let y=num(P.resetFirst)||10;y<nY;y+=num(P.resetEvery)) resetYrs.push(y);
+  const timingIssues=positionYearIssues(S), badTiming=new Set(timingIssues.map(issue=>issue.key));
+  if(P.resetOn&&!badTiming.has("resetFirst")&&!badTiming.has("resetEvery")&&num(P.resetEvery)>0){
+    const first=num(P.resetFirst)||10, every=num(P.resetEvery);
+    // Inspect only the finite analysis years. Iterating from an imported first
+    // reset or by a tiny interval can otherwise take unbounded work.
+    for(let y=0;y<nY;y++) if(y>=first&&(y-first)%every===0) resetYrs.push(y);
+  }
   /* CPI catch-up: periodically the lesser of the index move over the period and a
      compounded ceiling. */
   const cpiYrs=[];
-  if(P.cpiOn&&num(P.cpiEvery)>0)
-    for(let y=num(P.cpiEvery);y<nY;y+=num(P.cpiEvery)) cpiYrs.push(y);
+  if(P.cpiOn&&!badTiming.has("cpiEvery")&&num(P.cpiEvery)>0){
+    const every=num(P.cpiEvery);
+    for(let y=0;y<nY;y++) if(y>=every&&y%every===0) cpiYrs.push(y);
+  }
 
   const events=[];
-  let cur=null;
+  let cur=null, adjusted=false;
   for(let y=0;y<nY;y++){
     const i0=y*12;
     if(cur===null) cur=gr[i0];
@@ -1978,6 +2001,7 @@ function calcPositions(S,R){
         if(want>lim){ want=lim; capNote.push("capped at "+pc(num(P.resetCapNOI),0)+" of pre-rent NOI"); }
       }
       cur=want;
+      adjusted=true;
       note="FMV reset to "+pc(num(P.resetRate),2)+" of land"+(capNote.length?" ("+capNote.join("; ")+")":"");
     }
     if(cpiYrs.includes(y)){
@@ -1986,9 +2010,13 @@ function calcPositions(S,R){
       const cap=Math.pow(1+num(P.cpiCap),per)-1;
       const up=Math.min(idx,cap);
       cur=cur*(1+up);
+      adjusted=true;
       note=(note?note+"; ":"")+"CPI catch-up "+pc(up,2)+" (lesser of index and "+pc(num(P.cpiCap),2)+" compounded)";
     }
-    if(P.resetOn||P.cpiOn) for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur;
+    // Keep the contractual schedule until an actual reset/catch-up occurs.
+    // After an event the position scenario keeps its established level-rent
+    // policy until the next event.
+    if(adjusted){ for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur; }
     else cur=gr[Math.min(i0+11,nM-1)];
     if(note) events.push({yr:S.startYear+y,note,rent:cur*12});
   }
@@ -2018,18 +2046,21 @@ function calcPositions(S,R){
   const capLF=num(P.lfCap)||0.03;
   const pvAt=(arr,rate)=>{let v=0;for(let y=0;y<nY;y++) v+=arr[y]/Math.pow(1+rate,y+1);return v;};
   // reversion on the forward NOI in the exit year
-  const noiFwdPre=aNoiPre[nY-1]*(1+num(S.exitGrowth||0.02));
-  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+num(S.exitGrowth||0.02));
+  const exitGrowth=S.exitGrowth===undefined||S.exitGrowth===null||S.exitGrowth===""?0.02:num(S.exitGrowth);
+  const noiFwdPre=aNoiPre[nY-1]*(1+exitGrowth);
+  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+exitGrowth);
   const revFS=capFS>0?noiFwdPre/capFS*(1-num(S.costSale)):0;
   const revLH=capLH>0?noiFwdLH/capLH*(1-num(S.costSale)):0;
 
-  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)-(A.cap?A.cap[y]:0)||v),rFS)
+  // Leasing already includes capital. Keep an actual zero net cash flow rather
+  // than replacing it with gross NOI through a truthiness fallback.
+  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)),rFS)
                   +revFS/Math.pow(1+rFS,nY);
   const leasehold=pvAt(aLH,rLH)+revLH/Math.pow(1+rLH,nY);
   // the leased fee is the ground rent stream: capped, or run to an NPV when the
   // leasehold holds a purchase option at a set price
   let leasedFee, lfBasis;
-  if(P.optOn&&num(P.optYear)>0){
+  if(P.optOn&&!badTiming.has("optYear")&&num(P.optYear)>0){
     const oy=Math.min(num(P.optYear),nY);
     let v=0; for(let y=0;y<oy;y++) v+=aGR[y]/Math.pow(1+capLF,y+1);
     v+=num(P.optPrice)/Math.pow(1+capLF,oy);
@@ -2040,7 +2071,7 @@ function calcPositions(S,R){
   const rows=[];
   for(let y=0;y<nY;y++) rows.push({yr:S.startYear+y,noiPre:aNoiPre[y],gr:aGR[y],
     lh:aLH[y],ratio:aNoiPre[y]?aGR[y]/aNoiPre[y]:0});
-  return {rows,events,feeSimple,leasehold,leasedFee,lfBasis,
+  return {rows,events,...(timingIssues.length?{timingIssues}:{}),feeSimple,leasehold,leasedFee,lfBasis,
     sum:leasedFee+leasehold, gap:(leasedFee+leasehold)-feeSimple,
     grNoi:rows[0]?rows[0].ratio:0, maxRatio:rows.reduce((a,r)=>Math.max(a,r.ratio),0),
     lfFs:feeSimple?leasedFee/feeSimple:0,
@@ -2235,7 +2266,19 @@ function validateModel(S,R,onIssue){
       E("Rent roll",nm+" is set to a term length of zero","The lease has no expiry.", T("tenants",t,"termYears"));
   }
 
+  /* --- floating index units --- */
+  if(S.loanOn) for(const loan of debtLoans(S)) if(loan.rateType==="floating"){
+    try{
+      if(basisDebtCurveTokens(loan.curve).some(point=>!point.explicitPercent&&point.amount!==0&&Math.abs(point.amount)<1))
+        W("Debt",(loan.name||"Floating loan")+" has ambiguous fractional index rates",
+          "Unmarked fractions retain the legacy decimal-rate interpretation. Re-enter the curve as percentages to confirm the intended units (for example, 0.5% means one-half percent).",
+          T("loans",loan,"curve"));
+    }catch(error){ E("Debt",(loan.name||"Floating loan")+" has an invalid index curve",error.message,T("loans",loan,"curve")); }
+  }
+
   /* --- leased fee / leasehold --- */
+  for(const issue of positionYearIssues(S)) E("Ground lease",issue.message,
+    "The invalid timing assumption is not applied to the position comparison.",T("position",S.pos,issue.key));
   if((S.groundLeases||[]).length){
     const X=calcPositions(S,R);
     if(X){
@@ -2626,6 +2669,25 @@ function idxFactor(S,sr,i){ const o=idxParse(sr), k0=num(S.startYear)*12+(num(S.
   const a=idxLevel(o,k0), b=idxLevel(o,k0+12*y); return (a&&b)?b/a:1; }
 function legacyLoan(S){ return {name:"Loan",sizing:"ltv",ltv:num(S.ltv),rateType:"fixed",rate:num(S.rate),amortYears:num(S.amortYears),
   ioAll:!!S.ioOnly,ioMonths:0,feePct:num(S.loanFee),exitFeePct:0,start:"",termMonths:0,ffMax:0,ffPct:1,legacy:true}; }
+function basisDebtCurveTokens(value){
+  if(value===undefined||value===null||value==="") return [];
+  if(typeof value!=="string"&&typeof value!=="number") throw Error("Floating index curve must be a list of annual percentages.");
+  const text=String(value).trim(); if(!text) return [];
+  if(text.length>32000) throw Error("Floating index curve is too long.");
+  const parts=text.replace(/(\d)\s+%/g,"$1%").split(/[,;\s]+/).filter(Boolean);
+  if(parts.length>512) throw Error("Floating index curve contains too many annual rates.");
+  return parts.map(token=>{
+    if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?%?$/.test(token)) throw Error("Invalid floating index rate: "+token.slice(0,80)+". Enter percentages separated by commas, semicolons or spaces.");
+    const explicitPercent=token.endsWith("%"), amount=Number(explicitPercent?token.slice(0,-1):token);
+    if(!Number.isFinite(amount)) throw Error("Floating index rates must be finite numbers.");
+    return {amount,explicitPercent};
+  });
+}
+function basisNormalizeDebtCurve(value){
+  // Newly edited curve cells are labeled as percentages. Store that unit
+  // explicitly instead of guessing from whether the rate is below one.
+  return basisDebtCurveTokens(value).map(point=>String(point.amount)+"%").join("; ");
+}
 function debtLoans(S){ if(!S.loanOn) return []; return (S.loans&&S.loans.length)?S.loans.filter(l=>l.on!==false):[legacyLoan(S)]; }
 function debtPayoffAt(loans,i){ return loans.reduce((a,x)=>a+((i<x.start||i>x.maturity)?0:x.bal[i]*(1+x.xf)),0); }
 function buildDebt(S,nM,nY,basis,leaseCostM){
@@ -2640,7 +2702,8 @@ function buildDebt(S,nM,nY,basis,leaseCostM){
     const fee=amt*num(L.feePct), xf=num(L.exitFeePct);
     const x={name:L.name||"Loan",amount:amt,fee,start:s0,maturity:mat,xf,int:Z(),prin:Z(),ds:Z(),bal:Z(),draw:Z(),balloon:Z(),rate:Z(),
       rateType:L.rateType||"fixed",ioMonths:Math.round(num(L.ioMonths)||0),ioAll:!!L.ioAll,amortYears:num(L.amortYears),pmt0:null};
-    const curve=String(L.curve||"").split(/[,;\s]+/).filter(Boolean).map(v=>{ const n=parseFloat(v); return isFinite(n)?(Math.abs(n)>=1?n/100:n):0; });
+    const curve=L.rateType==="floating"?basisDebtCurveTokens(L.curve).map(point=>
+      point.explicitPercent||Math.abs(point.amount)>=1?point.amount/100:point.amount):[];
     const rateAt=i=>{ if(L.rateType!=="floating") return num(L.rate);
       const y=Math.floor(i/12), ix=curve.length?curve[Math.min(y,curve.length-1)]:0;
       let r=ix+num(L.spread); if(num(L.floor)>0) r=Math.max(r,num(L.floor)); if(num(L.cap)>0) r=Math.min(r,num(L.cap)); return r; };
@@ -5086,7 +5149,7 @@ PANES["property.actuals"]=()=>{
       field("Data configuration","which of them the cash flow uses",sel(S,"dataCfg",[{v:"abf",t:"Actual + Budget + Forecast"},{v:"af",t:"Actual + Forecast"},{v:"bf",t:"Budget + Forecast"},{v:"f",t:"Forecast Only"}],{redraw:true}))])])]),
     titled("Actuals",series(S.actuals,"a")),addBtn("+ Add actuals for a line",()=>S.actuals.push({id:uid(),line:"rent",data:""})),
     titled("Budget",series(S.budgets,"b")),addBtn("+ Add a budget for a line",()=>S.budgets.push({id:uid(),line:"rent",data:""})),
-    el("p",{class:"hint",text:"Enter actual and budget amounts by month for any line, in XL4ADW's own format (2025/01|63945.98;2025/02|...) or pasted as two columns. Through the actual values end month, a line's actuals replace its forecast in the cash flow; later months are forecast. With revenue actuals, actual months carry no general vacancy or credit loss (the switch above). Budgets change nothing in the cash flow: they feed the Budget Comparison and Month YTD Variance reports."})]);
+    el("p",{class:"hint",text:"Enter actual and budget amounts by month for any line, in XL4ADW's own format (2025/01|63945.98;2025/02|...) or pasted as two columns. Through the actual values end month, a line's actuals replace its forecast in the cash flow; later months are forecast. With revenue actuals, actual months carry no general vacancy or credit loss (the switch above). Actual and budget values replace forecasts through their respective end dates when included in the selected Data Configuration. Months without a supplied value retain their forecast. Budget Comparison and Month YTD Variance reports remain available."})]);
 };
 PANES["tenants.incent"]=()=>{
   const ev=optsOf((S.payTimes||[]).filter(p=>p.mode!=="calendar"),"Lump sum"), d=()=>el("td",{class:"mut r",text:"\u2014"});
@@ -5220,6 +5283,16 @@ PANES["valuation.pvset"]=()=>el("div",{class:"grid2"},[vCard("Present value",[
   vCard("Value",R?[field("Present value","",el("span",{class:"pill",text:money(R.pv)})),field("Per "+(S.areaUnit||"SF"),"",el("span",{class:"pill",text:"$"+psf(R.sf?R.pv/R.sf:0)})),
     field("Unleveraged IRR at the price","",el("span",{class:"pill",text:R.irrU===null?"\u2014":pc(R.irrU,2)}))]:[el("span",{class:"mut",text:"No calculation"})])]);
 PANES["valuation.debt"]=()=>{
+  const curveInput=L=>{
+    const model=S,input=el("input",{type:"text","aria-label":"Index Curve, Percent by Year",value:L.curve||""});
+    input.addEventListener("input",()=>{input.setCustomValidity("");input.removeAttribute("aria-invalid");input.classList.remove("bad");});
+    input.addEventListener("change",()=>{
+      if(S!==model||!S.loans.includes(L))return;
+      try{const value=basisNormalizeDebtCurve(input.value);input.setCustomValidity("");input.removeAttribute("aria-invalid");input.classList.remove("bad");input.value=value;L.curve=value;DIRTY();}
+      catch(error){input.setCustomValidity(error.message||"Enter annual percentages separated by semicolons.");input.setAttribute("aria-invalid","true");input.classList.add("bad");input.reportValidity();}
+    });
+    return basisMarkField(input,L,"curve");
+  };
   // the old single loan becomes the first row, carrying its own settings, so nothing changes until edited
   if(!S.loans||!S.loans.length) S.loans=[Object.assign({id:uid(),on:true},legacyLoan(S))];
   const d=()=>el("td",{class:"mut r",style:"padding:4px 8px",text:"\u2014"});
@@ -5234,7 +5307,7 @@ PANES["valuation.debt"]=()=>{
         el("td",{},[dInp(L,"start")]),el("td",{class:"n"},[inp(L,"termMonths",{step:"1"})]),
         el("td",{},[sel(L,"rateType",[{v:"fixed",t:"Fixed"},{v:"floating",t:"Floating"}])]),
         fl?d():el("td",{class:"n"},[inp(L,"rate",{pctv:1})]),fl?el("td",{class:"n"},[inp(L,"spread",{pctv:1})]):d(),
-        fl?el("td",{},[inp(L,"curve",{type:"text"})]):d(),fl?el("td",{class:"n"},[inp(L,"floor",{pctv:1})]):d(),
+        fl?el("td",{},[curveInput(L)]):d(),fl?el("td",{class:"n"},[inp(L,"floor",{pctv:1})]):d(),
         fl?el("td",{class:"n"},[inp(L,"cap",{pctv:1})]):d(),
         L.ioAll?d():el("td",{class:"n"},[inp(L,"ioMonths",{step:"1"})]),el("td",{style:"text-align:center"},[inp(L,"ioAll",{type:"checkbox"})]),
         L.ioAll?d():el("td",{class:"n"},[inp(L,"amortYears")]),el("td",{class:"n"},[inp(L,"feePct",{pctv:1})]),
@@ -5579,6 +5652,10 @@ PANES["valuation.pos"]=()=>{
     el("td",{class:"r"+(r.ratio>0.40?" neg":""),text:pc(r.ratio,1)})])));
   t.append(tb);
   return el("div",{},[
+    X?.timingIssues?.length?el("div",{class:"note err",role:"alert"},[
+      el("strong",{text:"Review Ground-Lease Timing"}),
+      ...X.timingIssues.map(issue=>el("p",{text:issue.message+" This assumption has not been applied to the comparison."}))
+    ]):null,
     X?el("div",{class:"kpis"},[
       card("Fee simple",money(X.feeSimple),pc(X.rFS,2)+" / "+pc(X.capFS,2)+" exit"),
       card("Leasehold",money(X.leasehold),pc(X.rLH,2)+" / "+pc(X.capLH,2)+" exit"),
@@ -6127,8 +6204,14 @@ PANES["tools.tie"]=()=>{
 // line by line, with the cash flow and DCF value from the same source file. Anything not carried is a warning.
 const AX_SEC=/^(Property|Market|Expenses|Revenues|Tenants|Investment|Valuation|Modeling Policies) - .+$/;
 const axC=r=>{ const o=[]; (r||[]).forEach((v,j)=>{ if(v!==null&&v!==undefined){ const s=String(v).trim(); if(s!=="") o.push({j,v:s}); } }); return o; };
-const axN=v=>{ if(v===null||v===undefined) return null; const s=String(v).trim(); if(!s||/^(none|n\/a|varies|defined|same)/i.test(s)) return null;
-  const neg=/^\(.*\)$/.test(s)||/^-/.test(s), pct=/%$/.test(s), n=parseFloat(s.replace(/[$,()%\s-]/g,"")); return isFinite(n)?(neg?-n:n)/(pct?100:1):null; };
+const axN=v=>{ if(v===null||v===undefined) return null; let s=String(v).trim(); if(!s||/^(none|n\/a|varies|defined|same)/i.test(s)) return null;
+  let currency=false,pct=false;const stripCurrency=()=>{const match=/^([+-]?)\s*\$\s*/.exec(s);if(!match)return true;if(currency)return false;currency=true;s=match[1]+s.slice(match[0].length);return true;};
+  if(!stripCurrency())return null;if(s.endsWith('%')){pct=true;s=s.slice(0,-1).trim();}
+  const neg=/^\([\s\S]*\)$/.test(s);if(neg)s=s.slice(1,-1).trim();
+  if(!stripCurrency())return null;if(s.endsWith('%')){if(pct)return null;pct=true;s=s.slice(0,-1).trim();}
+  s=s.replace(/^([+-])\s+/,'$1');
+  if(!/^[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(s))return null;
+  const n=Number(s.replace(/,/g,''));return Number.isFinite(n)?(neg?-Math.abs(n):n)/(pct?100:1):null; };
 const AX_MON=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const axD=v=>{ const s=String(v||"").trim(); let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m) return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");
   m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[0]; m=s.match(/^(\d{1,2})\/(\d{4})$/); if(m) return m[2]+"-"+m[1].padStart(2,"0")+"-01";
@@ -6671,7 +6754,7 @@ const intPath=(base,t)=>{ t=String(t||""); const segs=(t.startsWith("/")?t.slice
 
 // ---- Excel: shared strings, date styles, every sheet as pipe-separated rows ----
 const intSerial=(n,date1904=false)=>officeSheetDate(n,false,date1904);
-const intNum=n=>Math.abs(n)>=1e15?String(n):String(+n.toPrecision(12));
+const intNum=n=>String(n);
 function intCol(ref){ let c=0; for(const ch of ref){ const k=ch.charCodeAt(0); if(k<65||k>90) break; c=c*26+(k-64); } return c-1; }
 function intCellLocation(sheet,row,col){
   let letters="",n=col+1;while(n>0){const digit=(n-1)%26;letters=String.fromCharCode(65+digit)+letters;n=Math.floor((n-1)/26);}
@@ -7230,10 +7313,14 @@ async function intAdd(files){
     const d={id:uid(),name:f.name,size:f.size,ext,kind:INT_EXT[ext]||"Unsupported",status:"reading",pages:[],images:[],scans:0,err:"",warn:"",on:true};
     INT.docs.push(d); drawPane();
     const controller=new AbortController();d.readController=controller;const scope={active:()=>version===iReadDocumentsVersion&&INT.docs.includes(d),signal:controller.signal};
-    const deadline=setTimeout(()=>{const error=Error("Document reading took too long; split the file or try again");error.name="TimeoutError";controller.abort(error);},INT_PDF_TIMEOUTS.document);
-    try{await intRead(d,f,scope);if(scope.active())d.status="ready";}
+    // Some browser file/decoder promises cannot be cancelled. Bound our wait
+    // anyway, and isolate their late writes from the visible document record.
+    const reading={...d,pages:[],images:[]};
+    Object.defineProperty(reading,"status",{enumerable:true,get:()=>d.status,set:value=>{if(scope.active()&&!controller.signal.aborted)d.status=value;}});
+    try{await basisPdfWait(()=>intRead(reading,f,scope),{timeoutMs:INT_PDF_TIMEOUTS.document,signal:controller.signal,label:"Document reading",onStop:error=>controller.abort(error)});
+      iReadCheck(scope);for(const key of ["pages","images","scans","warn","unit","chars"])if(Object.hasOwn(reading,key))d[key]=reading[key];d.status="ready";}
     catch(e){if(scope.active()){d.status="error";d.err=(e&&e.message)||String(e);}}
-    finally{clearTimeout(deadline);delete d.readController;}
+    finally{delete d.readController;}
     if(scope.active())drawPane(); }
 }
 async function intRead(d,f,scope){
@@ -7247,7 +7334,7 @@ async function intRead(d,f,scope){
     const r=await intPdf(buffer,(n,N)=>{iReadCheck(scope);d.status="reading page "+n+" of "+N;if(!scope||scope.active())drawPane();},scope);
     try{iReadCheck(scope);
     d.pages=r.pages; d.scans=r.scans.length;
-    if(r.scans.length){ const lim=await intLimits();
+    if(r.scans.length){ const lim=await basisPdfWait(intLimits(),{timeoutMs:intPdfLimit(scope,"load"),signal:scope&&scope.signal,label:"Preparing PDF image reading"});
       iReadCheck(scope);
       if(lim&&lim.images){ for(const n of r.scans.slice(0,60)){iReadCheck(scope);d.status="imaging scanned page "+n;drawPane();const blob=await intRenderPage(r.pdf,n,scope);iReadCheck(scope);d.images.push({n,blob});}
         if(r.scans.length>60) d.warn="Only the first 60 scanned pages are sent."; }
@@ -7448,10 +7535,26 @@ async function intExtract(){
 
 // ---- normalizing what comes back ----
 const iA=v=>Array.isArray(v)?v:(v&&typeof v==="object"?[v]:[]);   // a list where the model may send text or one object
-const iN=v=>{ if(v===null||v===undefined||v==="") return null; if(typeof v==="number") return isFinite(v)?v:null;
-  const s=String(v).trim(), pct=/%$/.test(s), neg=/^\(.*\)$/.test(s)||/^-/.test(s), n=parseFloat(s.replace(/[$,()\s%-]/g,""));
-  return isFinite(n)?(neg?-n:n)*(pct?0.01:1):null; };
-const iP=v=>{ const n=iN(v); return n===null?null:(Math.abs(n)>1&&Math.abs(n)<=100?n/100:n); };
+const iN=v=>{
+  if(typeof v==="number")return Number.isFinite(v)?v:null;
+  if(typeof v!=="string"||!v.trim())return null;
+  let s=v.trim(),negative=false;
+  if(s.startsWith('(')&&s.endsWith(')')){negative=true;s=s.slice(1,-1).trim();}
+  const m=s.match(/^([+-])?(\$)?([+-])?((?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?|\.\d+)([eE][+-]?\d+)?$/);
+  if(!m||m[1]&&m[3]||negative&&(m[1]||m[3]))return null;
+  const n=Number((m[1]||m[3]||'')+m[4].replace(/,/g,'')+(m[5]||''));
+  return Number.isFinite(n)?(negative?-n:n):null;
+};
+const iP=v=>{
+  let percent=false;
+  if(typeof v==='string'){
+    let s=v.trim();if(s.includes('$'))return null;
+    if(/^\(.*%\)$/.test(s)){percent=true;s='('+s.slice(1,-2)+')';}
+    else if(s.endsWith('%')){percent=true;s=s.slice(0,-1).trim();}
+    v=s;
+  }
+  const n=iN(v);return n===null?null:percent?n/100:(Math.abs(n)>1&&Math.abs(n)<=100?n/100:n);
+};
 const iD=v=>{ if(!v) return null; const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?/);
   if(m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+(m[3]||"1").padStart(2,"0");
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(m){ let y=+m[3]; if(y<100) y+=y<70?2000:1900; return y+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0"); }
@@ -7470,6 +7573,44 @@ const INT_DT={rent_roll:"Rent roll",lease:"Lease",lease_abstract:"Lease abstract
 // Unknown categories keep neutral display and lowest priority without rewriting source metadata.
 const intDocType=value=>typeof value==="string"&&Object.hasOwn(INT_DT,value)?value:"other";
 const intSame=(a,b,tol)=>{ if(typeof a==="number"&&typeof b==="number") return Math.abs(a-b)<=(tol!==undefined?tol:0.005*Math.max(Math.abs(a),Math.abs(b),1e-9)); return String(a)===String(b); };
+function intNumericIssues(result){
+  const fields=new Set(['rentableSF','yearBuilt','landAcres','parkingSpaces','sf','amount','months','value','baseYear','stopPSF','stopAmount','fixedPSF','fixedAmount','proRataShare','adminFeePct','grossUpPct','capPct','psf','pct','count','termYears','noticeMonths','fee','rate','breakpoint','salesAnnual','confidence','vacancyPct','creditLossPct','rentGrowth','expenseGrowth','marketRentPSF','renewalProb','downtimeMonths','freeRentNew','freeRentRenew','tiNewPSF','tiRenewPSF','lcNewPct','lcRenewPct','escalationPct','purchasePrice','goingInCap','exitCap','discountRate','holdYears','saleCostPct','ltv','spread','floor','amortYears','ioMonths','termMonths','feePct']);
+  const percentages=new Set(['proRataShare','adminFeePct','grossUpPct','capPct','pct','rate','vacancyPct','creditLossPct','rentGrowth','expenseGrowth','renewalProb','lcNewPct','lcRenewPct','escalationPct','goingInCap','exitCap','discountRate','saleCostPct','ltv','spread','floor','feePct']);
+  const issues=[];
+  const walk=(value,path='',depth=0)=>{if(!value||typeof value!=='object'||depth>8)return;
+    for(const [key,item]of Object.entries(value)){
+      if(key==='src'||key==='fieldSources')continue;
+      const at=path?path+'.'+key:key;
+      if(fields.has(key)&&item!==null&&item!==undefined&&item!==''){
+        const percent=percentages.has(key)&&!(key==='pct'&&path.endsWith('freeRent'))||key==='value'&&(value.type==='pct'||['pct_fmv','pct_increase'].includes(value.rent));
+        if((percent?iP(item):iN(item))===null)issues.push(at+': unsupported numeric text; its value was left for manual review.');
+      }else if(item&&typeof item==='object')walk(item,at,depth+1);
+    }
+  };walk(result);return issues;
+}
+function intDebtIssues(loan){
+  const issues=[];
+  if(!(iN(loan.amount)>0)&&!(iP(loan.ltv)>0))issues.push('a stated positive principal or LTV');
+  if(typeof loan.floating!=='boolean')issues.push('whether the rate is fixed or floating');
+  if(loan.floating)issues.push('an explicit floating index curve and full rate terms entered manually in Debt Financing');
+  else if(iP(loan.rate)===null)issues.push('a stated fixed interest rate');
+  for(const [key,label]of [['amortYears','amortization years (0 for an explicit interest-only loan)'],['ioMonths','interest-only months (0 if none)'],['termMonths','loan term in months (0 only if explicitly open-ended)'],['feePct','origination fee (0 if none)']])if(iN(loan[key])===null&&!(key==='feePct'&&iP(loan[key])!==null))issues.push(label);
+  const amort=iN(loan.amortYears);if(amort!==null&&amort<0)issues.push('nonnegative amortization years');
+  for(const key of ['ioMonths','termMonths']){const n=iN(loan[key]);if(n!==null&&(!Number.isInteger(n)||n<0))issues.push(key==='ioMonths'?'nonnegative whole interest-only months':'a nonnegative whole loan term in months');}
+  return issues;
+}
+function intRecoveryIssues(recovery){
+  const type=typeof recovery?.type==='string'?recovery.type.toLowerCase():'';
+  return type&&!['nnn','base_year','expense_stop','modified_gross','full_service','fixed','none'].includes(type)?['the recovery type is unsupported; keep the current structure or enter a supported recovery clause']:[];
+}
+function intOptionIssues(options){
+  const option=options?.[0];if(!option)return [];
+  const issues=[],kind=String(option.rent||'');
+  if(!(iN(option.termYears)>0))issues.push('a stated positive option term');
+  if(!['fmv','pct_fmv','fixed_psf','pct_increase'].includes(kind))issues.push('a supported stated option-rent treatment');
+  if(kind!=='fmv'&&['pct_fmv','fixed_psf','pct_increase'].includes(kind)&&(kind==='fixed_psf'?iN(option.value):iP(option.value))===null)issues.push('the stated option-rent amount or percentage');
+  return issues;
+}
 function intOverhead(){ return intBytes(intPrompt({name:"x".repeat(120),kind:"PDF",unit:"Page"},{parts:[],images:[]},8,9))+3000; }
 function intEst(d){ const b=Math.max(20000,((_intLim&&_intLim.maxPromptBytes)||150000)-intOverhead());
   let n=0, cur=0; for(const p of d.pages){ if(p.hidden||p.off||!((p.text||"").trim()||(d.images||[]).some(q=>q.n===p.n))) continue; const t=intBytes(p.text||"")+60; if(cur&&cur+t>b){ n++; cur=0; } cur+=t; while(cur>b){ n++; cur-=b; } }
@@ -7480,6 +7621,7 @@ function intMerge(docs){
   const candidates=[],C={property:{},market:{},valuation:{}}, put=(bag,k,v,src,pri)=>{ if(v===null||v===undefined||v==="") return; (bag[k]=bag[k]||[]).push({v,src,pri}); };
   const statementContexts=new Map(docs.map(d=>[d,basisStatementContext(d.results||[])]));
   for(const d of docs) for(const r of d.results){
+    for(const text of intNumericIssues(r))X.warnings.push({doc:d.name,text});
     const dt=intDocType(r.docType); if(!d.docType) d.docType=dt; const s0=intSrc(d,dt,null), pri=INT_PRI[dt]||1;
     const P=r.property||{};
     for(const k of ["name","address","city","state","zip","type","submarket"]) put(C.property,k,P[k]?String(P[k]).trim():null,s0,pri);
@@ -7487,26 +7629,30 @@ function intMerge(docs){
     for(const t of iA(r.tenants)){ if(!t||!(t.name||t.suite)) continue;
       const src=intSrc(d,dt,t.src), sf=iN(t.sf);
       const {steps,rentIssues}=basisIntakeRent(t);
+      if(t.escalation&&t.escalation.value!==null&&t.escalation.value!==undefined&&t.escalation.value!==''&&(t.escalation.type==='pct'?iP(t.escalation.value):iN(t.escalation.value))===null)rentIssues.push('The escalation amount is unsupported.');
       for(const issue of rentIssues)X.warnings.push({doc:d.name,text:(t.name||t.suite)+": "+issue+" Rent terms were left for manual review."});
       const c={name:String(t.name||"Tenant").trim(),suite:t.suite?String(t.suite).replace(/^(suite|ste)\.?\s*/i,"").trim():"",sf,
         leaseType:t.leaseType||"",status:t.status||"",start:iD(t.start),end:iD(t.end),steps,esc:t.escalation||null,free:t.freeRent||null,rec:t.recovery||null,
         sd:t.securityDeposit||null,ti:t.ti||null,lc:t.lc||null,opts:iA(t.renewalOptions),term:t.termination||null,pr:t.percentageRent||null,other:t.other||"",
-        src,amendmentDate:basisAmendmentDate(t.amendmentDate??r.amendmentDate),rentChange:t.rentChange||null,recoveryChange:t.recoveryChange||null,fieldSources:basisIntakeTenantSources(d,dt,t),rentIssues,hasRent:iA(t.rent).length>0,pri,priSF:INT_PSF[dt]||2,conf:Math.max(0,Math.min(1,iN(t.confidence)??0.5))};
+        src,amendmentDate:basisAmendmentDate(t.amendmentDate??r.amendmentDate),rentChange:t.rentChange||null,recoveryChange:t.recoveryChange||null,fieldSources:basisIntakeTenantSources(d,dt,t),rentIssues,numericIssues:intNumericIssues(t),hasRent:iA(t.rent).length>0,pri,priSF:INT_PSF[dt]||2,conf:Math.max(0,Math.min(1,iN(t.confidence)??0.5))};
       candidates.push(c); }
     for(const e of iA(r.expenses)){ if(!e||!e.name) continue;
       const normalized=basisStatementInput(e,statementContexts.get(d));
       if(normalized.issues.length){X.warnings.push({doc:d.name,text:String(e.name)+": "+normalized.issues.join(" ")+" This expense was not proposed; check the source and enter the corrected line manually."});continue;}
       const {amount,basis,months,annualized}=normalized;
       const c={name:String(e.name).trim(),amount,basis,months,annualized,
-        recov:typeof e.recoverable==="boolean"?e.recoverable:null,cat:e.category||"other",src:intSrc(d,dt,e.src),pri:INT_PEXP[dt]||1};
+        recov:typeof e.recoverable==="boolean"?e.recoverable:null,cat:e.category||"other",src:intSrc(d,dt,e.src),docKey:docs.indexOf(d),pri:INT_PEXP[dt]||1};
       let g=X.expenses.find(G=>G.c.some(o=>iK(o.name)===iK(c.name)||iSim(o.name,c.name)>=0.8));
-      if(!g){ g={key:uid(),c:[]}; X.expenses.push(g); } g.c.push(c); }
+      if(!g){ g={key:uid(),c:[]}; X.expenses.push(g); }
+      const repeated=c.src.page&&String(c.src.quote||'').trim().length>=8&&g.c.some(o=>o.docKey===c.docKey&&JSON.stringify([o.name,o.amount,o.basis,o.months,o.recov,o.cat,o.src.page,o.src.quote])===JSON.stringify([c.name,c.amount,c.basis,c.months,c.recov,c.cat,c.src.page,c.src.quote]));
+      if(!repeated)g.c.push(c); }
     for(const o of iA(r.otherIncome)){ if(!o||!o.name) continue;
       const normalized=basisStatementInput(o,statementContexts.get(d),true);
       if(normalized.issues.length){X.warnings.push({doc:d.name,text:String(o.name)+": "+normalized.issues.join(" ")+" This income was not proposed; check the source and enter the corrected line manually."});continue;}
       if(!X.other.some(q=>iK(q.name)===iK(o.name))) X.other.push({key:uid(),name:String(o.name),annual:normalized.amount,months:normalized.months,annualized:normalized.annualized,src:intSrc(d,dt,o.src)}); }
     for(const o of iA(r.capital)){ const a=iN(o&&o.amount); if(!o||a===null) continue;
-      if(!X.capital.some(q=>iK(q.name)===iK(o.name)&&intSame(q.amount,a))) X.capital.push({key:uid(),name:String(o.name||"Capital item"),amount:a,date:iD(o.date)||(iN(o.date)?String(Math.round(iN(o.date)))+"-01-01":null),src:intSrc(d,dt,o.src)}); }
+      const date=iD(o.date)||(iN(o.date)?String(Math.round(iN(o.date)))+"-01-01":null);
+      if(!X.capital.some(q=>iK(q.name)===iK(o.name)&&intSame(q.amount,a)&&q.date===date)) X.capital.push({key:uid(),name:String(o.name||"Capital item"),amount:a,date,src:intSrc(d,dt,o.src)}); }
     const M=r.market||{}, pm=INT_PVAL[dt]||1;
     for(const k of ["vacancyPct","creditLossPct","rentGrowth","expenseGrowth"]) put(C.market,k,iP(M[k]),s0,pm);
     for(const p of iA(M.profiles)){ if(!p||!p.name) continue; const q={key:uid(),name:String(p.name),src:s0,pri:pm};
@@ -7518,8 +7664,11 @@ function intMerge(docs){
     for(const k of ["purchasePrice","holdYears"]) put(C.valuation,k,iN(V[k]),s0,pv);
     for(const k of ["goingInCap","exitCap","discountRate","saleCostPct"]) put(C.valuation,k,iP(V[k]),s0,pv);
     put(C.valuation,"analysisStart",iD(V.analysisStart),s0,pv);
-    for(const b of iA(r.debt)){ if(!b) continue; const q={key:uid(),name:String(b.name||"Loan"),amount:iN(b.amount),ltv:iP(b.ltv),rate:iP(b.rate),floating:!!b.floating,
-        index:b.index||"",spread:iP(b.spread),floor:iP(b.floor),amortYears:iN(b.amortYears),ioMonths:iN(b.ioMonths),termMonths:iN(b.termMonths),feePct:iP(b.feePct),src:s0,pri:INT_PDEBT[dt]||1};
+    for(const b of iA(r.debt)){ if(!b) continue;
+      if(intNumericIssues(b).length){X.warnings.push({doc:d.name,text:String(b.name||'Loan')+': debt terms were not proposed because a numeric field is unsupported. Review its amount, rate and term manually.'});continue;}
+      const q={key:uid(),name:String(b.name||"Loan"),amount:iN(b.amount),ltv:iP(b.ltv),rate:iP(b.rate),floating:typeof b.floating==='boolean'?b.floating:null,
+        index:b.index||"",spread:iP(b.spread),floor:iP(b.floor),amortYears:iN(b.amortYears),ioMonths:iN(b.ioMonths),termMonths:iN(b.termMonths),feePct:iP(b.feePct),src:s0,pri:INT_PDEBT[dt]||1,issues:intDebtIssues(b)};
+      if(q.issues.length)X.warnings.push({doc:d.name,text:q.name+': loan proposal is unchecked and cannot be applied until confirmed. Missing or unsupported: '+q.issues.join('; ')+'. Enter complete loan terms manually in Debt Financing.'});
       if(q.amount!==null||q.ltv!==null) if(!X.debt.some(z=>z.amount===q.amount&&z.rate===q.rate)) X.debt.push(q); }
     for(const w of (Array.isArray(r.warnings)?r.warnings:r.warnings?[r.warnings]:[])) if(w) X.warnings.push({doc:d.name,text:String(w)}); }
   const best=(arr,label)=>{ if(!arr||!arr.length) return null; const s=[...arr].sort((a,b)=>b.pri-a.pri);
@@ -7532,7 +7681,11 @@ function intMerge(docs){
   for(const g of X.expenses){ const s=[...g.c].sort((a,b)=>b.pri-a.pri), b=s[0];
     const o=s.filter(c=>c.basis===b.basis&&Math.abs(c.amount-b.amount)>0.02*Math.max(Math.abs(b.amount),1));
     if(o.length) X.conflicts.push({what:"Expense "+b.name,chosen:{v:b.amount,src:b.src},others:o.map(c=>({v:c.amount,src:c.src}))});
-    g.r=Object.assign({},b,{recov:s.map(c=>c.recov).find(v=>v!==null)??null,match:intFindOp(b.name)});
+    const counts=new Map();for(const c of g.c)counts.set(c.docKey,(counts.get(c.docKey)||0)+1);
+    const ambiguousRows=[...counts.values()].some(n=>n>1);
+    g.r=Object.assign({},b,{recov:s.map(c=>c.recov).find(v=>v!==null)??null,...intExpenseMatch(b.name),ambiguousRows});
+    if(ambiguousRows)X.warnings.push({doc:b.src.doc,text:b.name+': multiple independent expense rows in one file have the same or similar name. They were not combined or summed. Leave this proposal unchecked and enter the reviewed detail lines manually, or re-extract with distinct line names.'});
+    if(g.r.ambiguousTargets)X.warnings.push({doc:b.src.doc,text:b.name+': several existing expense lines could match. This proposal is unchecked; choose its exact target when correcting it or enter the reviewed change manually in Operating Expenses.'});
     const mf=(S.ops||[]).find(o=>o.basis==="pctEGR"&&/manag/i.test(o.name));
     if(mf&&(b.cat==="management"||/manag/i.test(b.name))&&b.basis!=="pct"){ g.r.match=null; g.r.keepPct=mf; } }
   return X;
@@ -7549,6 +7702,7 @@ function intResolveTenant(g,X){
   r.rentChanges=cs.filter(c=>c.src.docType==="amendment"&&(c.hasRent||c.esc&&Object.keys(c.esc).length));
   r.recoveryChanges=cs.filter(c=>c.src.docType==="amendment"&&c.rec&&Object.keys(c.rec).length);
   const ws=by("pri").find(c=>c.hasRent&&c.src.docType!=="amendment");r.rentIssues=ws?.rentIssues||[];
+  r.numericIssues=[...new Set(cs.flatMap(c=>c.numericIssues||[]))];
   r.steps=ws&&!r.rentIssues.length?ws.steps.map(x=>({...x,annual:x.psf!==null&&r.sf>0?x.psf*r.sf:x.annual})):[];
   if(ws)r.fieldSources.steps=ws.fieldSources.steps;
   if(ws){ const at=d=>{ let v=r.steps[0]; for(const x of r.steps) if(x.from&&d&&x.from<=d) v=x; return v?v.annual:null; };
@@ -7556,20 +7710,27 @@ function intResolveTenant(g,X){
       if(a0&&b0&&Math.abs(a0-b0)>0.01*a0) X.conflicts.push({what:r.name+" · rent"+(l.from?" at "+l.from:""),chosen:{v:a0,src:ws.src},others:[{v:b0,src:c.src}]}); } }
   for(const k of ["leaseType","status","esc","free","rec","sd","ti","lc","term","pr"]){ const c=by("pri").find(q=>q[k]&&(k!=="rec"||q.src.docType!=="amendment")&&(k!=="esc"||q.src.docType!=="amendment")&&(typeof q[k]!=="object"||Object.keys(q[k]).length)); r[k]=c?c[k]:null;if(c)r.fieldSources[k]=c.fieldSources[k]; }
   const option=by("pri").find(q=>q.opts&&q.opts.length);r.opts=option?.opts||[];if(option)r.fieldSources.opts=option.fieldSources.opts;
+  r.optionIssues=intOptionIssues(r.opts);for(const text of r.optionIssues)X.warnings.push({doc:r.src.doc,text:r.name+': renewal option needs '+text+'. Existing option terms will be retained.'});
+  r.recoveryIssues=intRecoveryIssues(r.rec);for(const text of r.recoveryIssues)X.warnings.push({doc:r.src.doc,text:r.name+': '+text+'.'});
   r.other=cs.map(c=>c.other).filter(Boolean).join("; ");r.fieldSources.other=cs.filter(c=>c.other).map(c=>c.fieldSources.other);
   r.vacant=r.status==="vacant"||/^vacant/i.test(r.name); r.conf=Math.max(...cs.map(c=>c.conf));
   Object.assign(r,basisIntakeMatches(r,S.tenants||[]));
   r.amendmentIssues=basisAmendmentIssues(r);for(const text of r.amendmentIssues)X.warnings.push({doc:r.src.doc,text:r.name+": "+text});return r;
 }
 function intFindTenant(r){const match=basisIntakeMatches(r,S.tenants||[]).match;return (S.tenants||[]).find(t=>t.id===match)||null;}
-function intFindOp(nm){ return ((S.ops||[]).find(o=>iK(o.name)===iK(nm))||(S.ops||[]).find(o=>iSim(o.name,nm)>=0.8)||{}).id||null; }
+function intExpenseMatch(name){
+  const exact=(S.ops||[]).filter(o=>iK(o.name)===iK(name)),candidates=exact.length?exact:(S.ops||[]).filter(o=>iSim(o.name,name)>=0.8);
+  return {match:candidates.length===1?candidates[0].id:null,matchCandidates:candidates.map(o=>o.id),ambiguousTargets:candidates.length>1};
+}
+function intFindOp(nm){return intExpenseMatch(nm).match;}
 function intDefaultPicks(X){ const p={}; if(!X) return p;
-  for(const k in X.property) p["prop:"+k]=true; for(const g of X.tenants) p["t:"+g.key]=!g.r.rentIssues?.length&&!g.r.amendmentIssues?.length; for(const g of X.expenses) p["e:"+g.key]=!g.r.keepPct&&(g.r.recov!==null||!!g.r.match);
-  for(const o of X.other) p["o:"+o.key]=true; for(const o of X.capital) p["c:"+o.key]=true; for(const k in X.market) p["mk:"+k]=true;
-  for(const o of X.profiles) p["pf:"+o.key]=true; for(const k in X.valuation) p["v:"+k]=k!=="analysisStart"; for(const o of X.debt) p["d:"+o.key]=true; return p; }
+  for(const k in X.property) p["prop:"+k]=true; for(const g of X.tenants) p["t:"+g.key]=!g.r.rentIssues?.length&&!g.r.amendmentIssues?.length&&!g.r.numericIssues?.length&&!g.r.optionIssues?.length&&!g.r.recoveryIssues?.length; for(const g of X.expenses) p["e:"+g.key]=!g.r.keepPct&&!g.r.ambiguousRows&&!g.r.ambiguousTargets&&(g.r.recov!==null||!!g.r.match);
+  for(const o of X.other) p["o:"+o.key]=true; for(const o of X.capital) p["c:"+o.key]=!!basisIntakeCalendarDate(o.date); for(const k in X.market) p["mk:"+k]=true;
+  for(const o of X.profiles) p["pf:"+o.key]=true; for(const k in X.valuation) p["v:"+k]=k!=="analysisStart"; for(const o of X.debt) p["d:"+o.key]=!o.issues?.length; return p; }
 
 // ---- applying to the model: every write is logged with its source ----
 function intRecId(rv,t,notes){
+  if(intRecoveryIssues(rv).length)throw Error(t.name+': unsupported recovery type. Choose Keep Current Value for Recoveries or enter a supported recovery clause before applying.');
   const ty=String(rv.type||"").toLowerCase(), by=iN(rv.baseYear);
   let m="NNN", x={};
   if(ty==="base_year"||((ty==="modified_gross"||ty==="full_service")&&by)){ m="STOP"; t.baseYear=by?String(Math.round(by)):(t.start?t.start.slice(0,4):""); }
@@ -7578,8 +7739,10 @@ function intRecId(rv,t,notes){
   else if(ty==="modified_gross"||ty==="full_service"||ty==="none"){ m="GROSS"; }
   const af=m==="GROSS"?0:(iP(rv.adminFeePct)||0), cap=m==="GROSS"?0:(iP(rv.capPct)||0), ct=cap?(rv.capCumulative?"":"noncum"):"", gu=iP(rv.grossUpPct);
   if(iP(rv.proRataShare)) notes.push(t.name+": the lease states a "+(100*iP(rv.proRataShare)).toFixed(2)+"% share; Basis uses the area share ("+(100*num(t.sf)/Math.max(rentableSF(S),1)).toFixed(2)+"%).");
-  const hit=(S.recs||[]).find(s=>!s.lines&&s.method===m&&Math.abs(num(s.adminFee)-af)<1e-9&&Math.abs(num(s.capPct)-cap)<1e-9&&(s.capType||"")===ct
-    &&num(s.stopAmt)===num(x.stopAmt)&&num(s.fixed)===num(x.fixed)&&(gu===null||Math.abs(num(s.grossUp)-gu)<1e-9));
+  const plainKeys=new Set(['id','name','method','denom','adminFee','grossUp','fixed','pool','capPct','capType','stopAmt']);
+  const hit=(S.recs||[]).find(s=>!s.lines&&!s.pool&&(!s.denom||s.denom==='rentable')&&!Object.keys(s).some(k=>!plainKeys.has(k)&&s[k]!==null&&s[k]!==undefined&&s[k]!=='')
+    &&s.method===m&&Math.abs(num(s.adminFee)-af)<1e-9&&Math.abs(num(s.capPct)-cap)<1e-9&&(s.capType||"")===ct
+    &&num(s.stopAmt)===num(x.stopAmt)&&num(s.fixed)===num(x.fixed)&&Math.abs(num(s.grossUp)-(gu??1))<1e-9);
   if(hit) return hit.id;
   const lab={NNN:"Net",STOP:"Base year stop",STOPPSF:"Stop $"+x.stopAmt+"/SF",STOPAMT:"Stop $"+f0.format(num(x.stopAmt)),FIXED:"Fixed $"+x.fixed+"/SF",FIXEDAMT:"Fixed $"+f0.format(num(x.fixed)),GROSS:"Gross (none)"}[m];
   const rs=Object.assign({id:uid(),name:lab+(af?" + "+(100*af).toFixed(1).replace(/\.0$/,"")+"% admin":"")+(cap?", "+(100*cap).toFixed(1).replace(/\.0$/,"")+"% cap"+(ct?"":" (cumulative)"):""),
@@ -7589,6 +7752,10 @@ function intRecId(rv,t,notes){
 function intMla(lt){ const k=iK(lt); return ((S.mlas||[]).find(m=>k&&iK(m.name).includes(k))||(S.mlas||[])[0]||{}).id; }
 function intMapTenant(t,r,L,notes){
   r=JSON.parse(JSON.stringify(r));
+  for(const [field,label]of [['rec','recovery'],['sd','security deposit'],['ti','tenant improvement'],['lc','leasing commission'],['opts','renewal option'],['term','termination'],['pr','percentage rent']]){
+    if(r[field]&&intNumericIssues(r[field]).length){notes.push(t.name+': '+label+' terms were not applied because a numeric field is unsupported. Existing terms were retained for manual review.');r[field]=field==='opts'?[]:null;}
+  }
+  if(intOptionIssues(r.opts).length){notes.push(t.name+': renewal option terms were not applied. Confirm '+intOptionIssues(r.opts).join('; ')+'. Existing option terms were retained.');r.opts=[];}
   const source=field=>basisIntakeFieldSources(r,field),src=source('name'),lt=String(r.leaseType||"").toLowerCase();
   t.name=r.name; L(t.name+" · tenant",r.name,src);
   if(r.suite){ t.suite=r.suite; } if(r.sf>0){ t.sf=r.sf; L(t.name+" · area (SF)",t.sf,source('sf')); }
@@ -7603,8 +7770,8 @@ function intMapTenant(t,r,L,notes){
     if(!(sf>0))notes.push(t.name+": area is missing; "+(t.rentBasis==="yramt"?"annual rent is retained in $/year":"per-SF rent is retained in $/SF/year")+". Confirm SF before relying on cash flows.");
     if(st.length>1){ t.sched=st.map((x,k)=>({id:uid(),mode:"date",date:x.from||(k?null:t.start)||t.start,basis:Number.isFinite(x.psf)?"psfyr":"yramt",amt:Number.isFinite(x.psf)?x.psf:x.annual})).filter(x=>x.date); t.step=0;
       L(t.name+" · rent schedule",st.length+" dated rent steps (dollar or per-SF units retained)",source('rent')); }
-    else { t.sched=[]; const e=r.esc||{}, ty=String(e.type||"").toLowerCase(), v=iN(e.value);
-      if(ty==="pct"&&v) t.step=iP(v);
+    else { t.sched=[]; const e=r.esc||{}, ty=String(e.type||"").toLowerCase(), v=ty==='pct'?iP(e.value):iN(e.value);
+      if(ty==="pct"&&v) t.step=v;
       else if(ty==="fixed_psf"&&v&&sf>0&&t.start&&t.end){ const s0=parseM(t.start.slice(0,7)), e0=parseM(t.end.slice(0,7)), rows=[];
         for(let k=0,y=s0.y;y*12+s0.m<=e0.y*12+e0.m;k++,y++) rows.push({id:uid(),mode:"date",date:y+t.start.slice(4),basis:"yramt",amt:(st[0].annual/sf+k*v)*sf});
         t.sched=rows; t.step=0; }
@@ -7621,18 +7788,19 @@ function intMapTenant(t,r,L,notes){
       L(t.name+" · free rent",months+" month"+(months===1?"":"s")+" from lease month "+t.freeStart+", "+(100*(t.freePct==null||t.freePct===''?1:t.freePct))+"% of "+(t.freeType==='gross'?'base rent and recoveries':'base rent'),source('abatement'));
       if((t.freeList||[]).length)notes.push(t.name+": existing additional free-rent windows remain. Review them with this imported grant in the lease editor."); }
   }
+  if(r.rec&&intRecoveryIssues(r.rec).length){r.recoveryBlocked=t.name+': unsupported recovery type. Choose Keep Current Value for Recoveries or enter a supported recovery clause before applying.';notes.push(r.recoveryBlocked);r.rec=null;}
   if(r.rec&&r.rec.type){ t.rec=intRecId(r.rec,t,notes); L(t.name+" · recoveries",(S.recs.find(x=>x.id===t.rec)||{}).name,source('rec'));
     if(r.rec.excludesTaxes) notes.push(t.name+": taxes are excluded from its recoveries; give it a structure with its own pool."); }
   if(r.sd&&(iN(r.sd.amount)>0||iN(r.sd.months)>0)){ t.sdOn=true; if(iN(r.sd.amount)>0){ t.sdBasis="amt"; t.sdAmt=iN(r.sd.amount); } else { t.sdBasis="months"; t.sdAmt=iN(r.sd.months); }
     L(t.name+" · security deposit",t.sdBasis==="amt"?f0.format(t.sdAmt):t.sdAmt+" months",source('deposit')); }
   const future=t.start&&t.start>=mKey(S.startYear,S.startMonth);
   if(future&&r.ti&&(iN(r.ti.psf)>0||iN(r.ti.amount)>0)){ if(iN(r.ti.psf)>0){ t.tiBasis="psf"; t.tiAmt=iN(r.ti.psf); } else { t.tiBasis="amt"; t.tiAmt=iN(r.ti.amount); } L(t.name+" · TI",t.tiAmt+(t.tiBasis==="psf"?" $/SF":" $"),source('improvements')); }
-  if(future&&r.lc&&(iN(r.lc.pct)>0||iN(r.lc.psf)>0||iN(r.lc.amount)>0)){ if(iN(r.lc.pct)>0){ t.lcBasis="pct"; t.lcAmt=iP(r.lc.pct); } else if(iN(r.lc.psf)>0){ t.lcBasis="psf"; t.lcAmt=iN(r.lc.psf); } else { t.lcBasis="amt"; t.lcAmt=iN(r.lc.amount); }
+  if(future&&r.lc&&(iP(r.lc.pct)>0||iN(r.lc.psf)>0||iN(r.lc.amount)>0)){ if(iP(r.lc.pct)>0){ t.lcBasis="pct"; t.lcAmt=iP(r.lc.pct); } else if(iN(r.lc.psf)>0){ t.lcBasis="psf"; t.lcAmt=iN(r.lc.psf); } else { t.lcBasis="amt"; t.lcAmt=iN(r.lc.amount); }
     L(t.name+" · leasing commission",t.lcAmt+" ("+t.lcBasis+")",source('commissions')); }
   const o=(r.opts||[])[0];
-  if(o){ const yrs=iN(o.termYears)||5, v=iN(o.value), k=String(o.rent||"fmv");
+  if(o){ const yrs=iN(o.termYears),k=String(o.rent),v=['pct_fmv','pct_increase'].includes(k)?iP(o.value):iN(o.value);
     Object.assign(t,{optTermYears:Math.floor(yrs),optTermMonths:Math.round((yrs-Math.floor(yrs))*12)},
-      k==="fixed_psf"&&v?{optRentBasis:"psf",optRentAmt:v}:k==="pct_increase"&&v!==null?{optRentBasis:"pctLast",optRentAmt:iP(v)}:{optRentBasis:"pctMkt",optRentAmt:k==="pct_fmv"&&v?iP(v):1});
+      k==="fixed_psf"&&v!==null?{optRentBasis:"psf",optRentAmt:v}:k==="pct_increase"&&v!==null?{optRentBasis:"pctLast",optRentAmt:v}:{optRentBasis:"pctMkt",optRentAmt:k==="pct_fmv"&&v!==null?v:1});
     L(t.name+" · renewal option",(iN(o.count)||1)+" x "+yrs+" yrs at "+(t.optRentBasis==="pctMkt"?(100*t.optRentAmt).toFixed(0)+"% of market":t.optRentAmt+" ("+t.optRentBasis+")"),source('option'));
     notes.push(t.name+": renewal option recorded; expiry stays at Market (switch it to Option on the lease to assume exercise)."+((iN(o.count)||1)>1?" Only the first of "+iN(o.count)+" options is carried.":"")); }
   if(r.term&&iD(r.term.date)){ t.breakDate=iD(r.term.date); t.breakFee=iN(r.term.fee)||0; t.breakFeeBasis="amt"; t.breakOn=false;
@@ -7649,6 +7817,11 @@ function intPrepareApply(model,X,P,mode,review={}){
   try{
   const at=new Date().toISOString().slice(0,16).replace("T"," "), log=[], notes=[],tenantReviews=[],expenseIds=[],blocked=[], cnt={tNew:0,tUpd:0,eNew:0,eUpd:0,other:0};
   const L=(target,value,source)=>{const sources=Array.isArray(source)?source.filter(Boolean):source?[source]:[],src=sources[0];log.push({at,target,value:value===undefined||value===null?"":String(value),doc:src?.doc||"",page:src?.page??"",quote:src?.quote||"",docId:src?.docId||"",evidence:src?.evidence||"",...(sources.length>1?{sources}:{} )});};
+  // All date-dependent proposals use the selected analysis origin, not the old model's.
+  if(P['v:analysisStart']&&X.valuation.analysisStart){
+    const d=basisIntakeCalendarDate(X.valuation.analysisStart.v);if(!d)throw Error('Enter a valid analysis start date before applying.');
+    S.startYear=+d.slice(0,4);S.startMonth=+d.slice(5,7);
+  }
   if(mode==="replace"){ S.tenants=[]; S.ops=(S.ops||[]).filter(o=>o.basis==="pctEGR"); S.misc=[]; }
   const pf=k=>P["prop:"+k]&&X.property[k];
   if(pf("name")){ S.name=X.property.name.v; L("Property · name",S.name,X.property.name.src); }
@@ -7662,8 +7835,10 @@ function intPrepareApply(model,X,P,mode,review={}){
     if(!t){ t={id:uid(),name:r.name,suite:"",sf:0,start:"",end:"",rent:0,rentBasis:"psfyr",step:0,free:0,rec:(S.recs[0]||{}).id,mla:(S.mlas[0]||{}).id,expiry:"Market",baseYear:"",cpi:"",group:"",sched:[]};
       S.tenants.push(t); cnt.tNew++; } else cnt.tUpd++;
     if(typeof basisMapReviewedTenant==='function'){const item=basisMapReviewedTenant(t,{...r,modelBaseline,analysisStart},g.key,review,L,notes);tenantReviews.push(item);blocked.push(...item.blocked);}
-    else {const mapped=intMapTenant(t,{...r,modelBaseline,analysisStart},L,notes);blocked.push(...Object.values(mapped.amendmentBlocked||{}));} }
+    else {const mapped=intMapTenant(t,{...r,modelBaseline,analysisStart},L,notes);blocked.push(...Object.values(mapped.amendmentBlocked||{}),...(mapped.recoveryBlocked?[mapped.recoveryBlocked]:[]));} }
   for(const g of X.expenses){ if(!P["e:"+g.key]) continue; const e=g.r;
+    if(e.ambiguousRows)throw Error(e.name+': independent same-file expense rows need review. Leave this proposal unchecked and enter separate reviewed lines manually, or re-extract with distinct line names.');
+    if(mode!=='replace'&&e.ambiguousTargets&&(!e.match||!e.matchCandidates?.includes(e.match)||!S.ops.some(o=>o.id===e.match)))throw Error(e.name+': several existing expense lines match. Select a valid explicit target when correcting this proposal or enter the reviewed change manually.');
     let o=mode==="replace"?null:(S.ops||[]).find(q=>q.id===e.match);
     const basis=e.basis==="pct"?"pctEGR":e.basis==="psf"?"psf":"amt", recov=e.recov!==null?e.recov:false;
     if(e.recov===null)notes.push(e.name+": recovery eligibility is not stated. "+(o?"The current recovery setting is retained.":"Added as non-recoverable; confirm eligibility in Operating Expenses."));
@@ -7671,11 +7846,15 @@ function intPrepareApply(model,X,P,mode,review={}){
     expenseIds.push(o.id);o.amt=num(e.amount); o.basis=basis; if(e.recov!==null) o.recov=e.recov;
     L("Expense · "+o.name,basis==="pctEGR"?(100*o.amt).toFixed(2)+"% of EGR":f0.format(o.amt)+(basis==="psf"?" $/SF":" a year")+(e.annualized?" (annualized from "+e.months+" months)":""),e.src); }
   for(const q of X.other){ if(!P["o:"+q.key]) continue; (S.misc=S.misc||[]).push({id:uid(),name:q.name,amt:q.annual,basis:"amt",infl:null}); cnt.other++; L("Other income · "+q.name,f0.format(q.annual)+" a year"+(q.annualized?" (annualized from "+q.months+" months)":""),q.src); }
-  for(const q of X.capital){ if(!P["c:"+q.key]) continue; const y=q.date?parseInt(q.date.slice(0,4),10)-S.startYear:0;
+  for(const q of X.capital){ if(!P["c:"+q.key]) continue;
+    const date=basisIntakeCalendarDate(q.date);if(!date){notes.push(q.name+': capital date is missing or invalid; enter its timing manually. It was not added.');continue;}
+    const y=Math.floor(((+date.slice(0,4)-S.startYear)*12+(+date.slice(5,7)-S.startMonth))/12);
     if(y<0){ notes.push(q.name+": dated before the analysis, not added."); continue; }
     if(!Number.isInteger(y)||y>100)throw Error("Capital date exceeds the supported 100-year input range");
+    const hold=P['v:holdYears']&&X.valuation.holdYears?Math.round(X.valuation.holdYears.v):S.years;
+    if(y>=hold)notes.push(q.name+': retained in analysis year '+(y+1)+', after the current hold period; it does not enter the held-period cash flow.');
     const yrs=Array(y+1).fill(0); yrs[y]=q.amount; yrs.push(0);
-    (S.caps=S.caps||[]).push({id:uid(),name:q.name,amt:0,basis:"amt",year:0,infl:null,amtYears:yrs.join("; ")}); cnt.other++; L("Capital · "+q.name,f0.format(q.amount)+" in year "+(y+1),q.src); }
+    (S.caps=S.caps||[]).push({id:uid(),name:q.name,amt:0,basis:"amt",year:0,infl:null,timing:MON[+date.slice(5,7)-1],amtYears:yrs.join("; ")}); cnt.other++; L("Capital · "+q.name,f0.format(q.amount)+" in "+MON[+date.slice(5,7)-1]+", analysis year "+(y+1),q.src); }
   const mk=k=>P["mk:"+k]&&X.market[k];
   if(mk("vacancyPct")){ S.gvRate=X.market.vacancyPct.v; L("Market · general vacancy",(100*S.gvRate).toFixed(2)+"%",X.market.vacancyPct.src); }
   if(mk("creditLossPct")){ S.clRate=X.market.creditLossPct.v; L("Market · credit loss",(100*S.clRate).toFixed(2)+"%",X.market.creditLossPct.src); }
@@ -7684,15 +7863,18 @@ function intPrepareApply(model,X,P,mode,review={}){
   for(const p of X.profiles){ if(!P["pf:"+p.key]) continue;
     let m=(S.mlas||[]).find(z=>iK(z.name)===iK(p.name))||(S.mlas||[]).find(z=>iK(z.name).includes(iK(p.name))||iK(p.name).includes(iK(z.name)));
     if(!m){ m=JSON.parse(JSON.stringify((S.mlas||[])[0]||{})); m.id=uid(); m.name=p.name; (S.mlas=S.mlas||[]).push(m); }
-    const ch=[];
-    if(p.marketRentPSF!==null){ m.mrNewRef=""; m.mrRenewRef=""; m.mrNewLocal=p.marketRentPSF; m.mrRenewLocal=p.marketRentPSF; ch.push("rent $"+p.marketRentPSF+"/SF"); }
+    const ch=[],current=resolveMLA(m,S);
+    if(p.marketRentPSF!==null){ m.mrNewRef=""; m.mrRenewRef=""; m.rentUnit='psfyr';m.mrNewLocal=p.marketRentPSF; m.mrRenewLocal=p.marketRentPSF; ch.push("rent $"+p.marketRentPSF+"/SF/year"); }
     if(p.renewalProb!==null){ m.renewProb=p.renewalProb; ch.push((100*p.renewalProb).toFixed(0)+"% renewal"); }
     if(p.downtimeMonths!==null){ m.downtime=p.downtimeMonths; ch.push(p.downtimeMonths+" months vacant"); }
     if(p.termYears!==null){ m.termYears=Math.floor(p.termYears); m.termMonths=Math.round((p.termYears-Math.floor(p.termYears))*12); ch.push(p.termYears+"-year term"); }
     if(p.escalationPct!==null){ m.stepType="pct"; m.stepPct=p.escalationPct; ch.push((100*p.escalationPct).toFixed(1)+"% steps"); }
-    if(p.tiNewPSF!==null||p.tiRenewPSF!==null){ const e={id:uid(),name:p.name+" TI",newPSF:p.tiNewPSF||0,renewPSF:p.tiRenewPSF||0,infl:null}; (S.tis=S.tis||[]).push(e); m.tiRef=e.id; ch.push("TI $"+e.newPSF+"/$"+e.renewPSF); }
-    if(p.lcNewPct!==null||p.lcRenewPct!==null){ const e={id:uid(),name:p.name+" LC",newPct:p.lcNewPct||0,renewPct:p.lcRenewPct||0,basis:"pct",infl:null}; (S.lcs=S.lcs||[]).push(e); m.lcRef=e.id; ch.push("LC "+(100*e.newPct).toFixed(1)+"%"); }
-    if(p.freeRentNew!==null||p.freeRentRenew!==null){ const e={id:uid(),name:p.name+" free rent",newMo:p.freeRentNew||0,renewMo:p.freeRentRenew||0}; (S.frees=S.frees||[]).push(e); m.frRef=e.id; ch.push("free "+e.newMo+"/"+e.renewMo+" mo"); }
+    if(p.tiNewPSF!==null||p.tiRenewPSF!==null){ const old=(S.tis||[]).find(e=>e.id===m.tiRef),e={...(old||{infl:null}),id:uid(),name:p.name+" TI",newPSF:p.tiNewPSF??current.tiNew,renewPSF:p.tiRenewPSF??current.tiRenew}; (S.tis=S.tis||[]).push(e); m.tiRef=e.id; ch.push("TI $"+e.newPSF+"/$"+e.renewPSF); }
+    if(p.lcNewPct!==null||p.lcRenewPct!==null){
+      if(current.lcBasis==='psf'&&(p.lcNewPct===null||p.lcRenewPct===null))notes.push(p.name+': a partial percentage commission cannot replace a per-SF commission category. Existing commission terms were retained; enter both percentage terms or review the category manually.');
+      else{const old=(S.lcs||[]).find(e=>e.id===m.lcRef),e={...(old||{infl:null}),id:uid(),name:p.name+" LC",newPct:p.lcNewPct??current.lcNew,renewPct:p.lcRenewPct??current.lcRenew,basis:"pct"}; (S.lcs=S.lcs||[]).push(e); m.lcRef=e.id; ch.push("LC "+(100*e.newPct).toFixed(1)+"%");}
+    }
+    if(p.freeRentNew!==null||p.freeRentRenew!==null){ const old=(S.frees||[]).find(e=>e.id===m.frRef),e={...(old||{}),id:uid(),name:p.name+" free rent",newMo:p.freeRentNew??current.frNew,renewMo:p.freeRentRenew??current.frRenew}; (S.frees=S.frees||[]).push(e); m.frRef=e.id; ch.push("free "+e.newMo+"/"+e.renewMo+" mo"); }
     L("Market leasing · "+m.name,ch.join(", "),p.src); }
   const vl=k=>P["v:"+k]&&X.valuation[k];
   if(vl("purchasePrice")){ S.priceMode="price"; S.price=X.valuation.purchasePrice.v; L("Valuation · purchase price",f0.format(S.price),X.valuation.purchasePrice.src); }
@@ -7703,9 +7885,10 @@ function intPrepareApply(model,X,P,mode,review={}){
   if(vl("saleCostPct")){ S.costSale=X.valuation.saleCostPct.v; L("Valuation · cost of sale",(100*S.costSale).toFixed(2)+"%",X.valuation.saleCostPct.src); }
   if(vl("analysisStart")){ const d=X.valuation.analysisStart.v; S.startYear=+d.slice(0,4); S.startMonth=+d.slice(5,7); L("Valuation · analysis start",d.slice(0,7),X.valuation.analysisStart.src); }
   for(const b of X.debt){ if(!P["d:"+b.key]) continue;
-    const ln={id:uid(),on:true,name:b.name,sizing:b.amount!==null?"amount":"ltv",amount:b.amount||0,ltv:b.ltv||0,start:"",termMonths:b.termMonths||0,
-      rateType:b.floating?"floating":"fixed",rate:b.rate!==null?b.rate:0.06,spread:b.spread!==null?b.spread:0.025,curve:"",floor:b.floor||0,cap:0,
-      ioMonths:b.ioMonths||0,ioAll:false,amortYears:b.amortYears||30,feePct:b.feePct!==null?b.feePct:0.01,exitFeePct:0,ffMax:0,ffPct:1};
+    const issues=intDebtIssues(b);if(issues.length)throw Error(b.name+': loan was not applied. Confirm '+issues.join('; ')+'. Enter complete loan terms in Debt Financing.');
+    const ln={id:uid(),on:true,name:b.name,sizing:b.amount>0?"amount":"ltv",amount:b.amount??0,ltv:b.ltv??0,start:"",termMonths:b.termMonths,
+      rateType:"fixed",rate:b.rate,spread:0,curve:"",floor:0,cap:0,
+      ioMonths:b.ioMonths,ioAll:false,amortYears:b.amortYears,feePct:b.feePct,exitFeePct:0,ffMax:0,ffPct:1};
     (S.loans=S.loans||[]).push(ln); S.loanOn=true; cnt.other++;
     L("Debt · "+ln.name,(ln.sizing==="amount"?f0.format(ln.amount):(100*ln.ltv).toFixed(1)+"% LTV")+", "+(ln.rateType==="fixed"?(100*ln.rate).toFixed(2)+"% fixed":(b.index||"index")+" + "+(100*ln.spread).toFixed(2)+"%"),b.src);
     if(b.floating&&!S.curve) notes.push(ln.name+": floating rate; enter the index curve on the loan."); }
@@ -7721,7 +7904,7 @@ async function intApplySelected(){
   if(typeof document!=='undefined'&&document.querySelector('.basis-tenant-field-review [aria-invalid="true"]')){INT.err='Correct the highlighted review field before applying.';return false;}INT.applying=true;drawPane();
   const requireSelection=()=>{intRequireTarget(target);if(INT.x!==extraction||JSON.stringify(INT.pick)!==JSON.stringify(picks)||INT.mode!==mode||JSON.stringify(INT.review||{})!==JSON.stringify(review))throw Error("The selected extraction inputs changed. Review them again before applying.");};
   try{
-    requireSelection();const bad=intChecks(extraction,INT.docs).filter(check=>check.sev==="error"&&(!check.key||picks[check.key]));
+    requireSelection();const bad=intChecks(extraction,INT.docs,review).filter(check=>check.sev==="error"&&(!check.key||picks[check.key]));
     if(bad.length){const accepted=await kConfirm(bad.length+" check"+(bad.length===1?"":"s")+" found a problem in what's selected:\n• "+bad.slice(0,6).map(check=>check.msg).join("\n• ")+(bad.length>6?"\n• and "+(bad.length-6)+" more":"")+"\n\nApply anyway?","Apply anyway");requireSelection();if(!accepted)return false;}
     if(mode==="replace"){
       const accepted=await kConfirm("Replace mode creates a new property from a copy of “"+(S.name||"this property")+"” and leaves the original unchanged. Continue?","Continue");requireSelection();if(!accepted)return false;
@@ -7761,7 +7944,7 @@ const intF=v=>v===null||v===undefined?"":typeof v==="number"?(Math.abs(v)<1?v.to
    Each document against its own totals (lines vs the stated total), then the merged result against the building and
    against what is normal for the property type. Each flag: severity, area, message, the row it concerns and its source. */
 const INT_RANGE={Industrial:[2,40],Flex:[3,45],Office:[8,120],Retail:[3,200],Lab:[15,150],Multifamily:[6,80],Mixed:[2,150]};
-function intChecks(X,docs){ const out=[], add=(sev,area,msg,key,src)=>out.push({sev,area,msg,key:key||null,src:src||null});
+function intChecks(X,docs,review={}){ const out=[], add=(sev,area,msg,key,src)=>out.push({sev,area,msg,key:key||null,src:src||null});
   if(!X) return out; docs=docs||[];
   const fmt=n=>f0.format(Math.round(n)), $0=n=>(n<0?"-$":"$")+f0.format(Math.round(Math.abs(n)));
   const ptype=(X.property.type&&X.property.type.v)||S.ptype||"", range=INT_RANGE[ptype]||[1,250];
@@ -7776,6 +7959,10 @@ function intChecks(X,docs){ const out=[], add=(sev,area,msg,key,src)=>out.push({
     if(Math.abs(v-bsf)>0.01*bsf) add(v>bsf?"warn":"info","Rent roll",`Tenant and vacant areas add to ${fmt(v)} SF; the building is ${fmt(bsf)} SF (from ${bsfFrom}). ${v>bsf?"Something may be counted twice.":"Space not listed will be modeled as vacant."}`); }
   const seen={};
   for(const {g,r} of tens){ const k="t:"+g.key, nm=r.name||"Tenant", sf=num(r.sf);
+    if(r.numericIssues?.length)add('error','Tenant',nm+': unsupported numeric fields need manual review. '+r.numericIssues.join(' '),k,r.src);
+    if(r.optionIssues?.length)add('error','Tenant',nm+': renewal option needs '+r.optionIssues.join('; ')+'. Existing option terms will be retained.',k,r.src);
+    const recDecision=review?.[g.key]?.rec,recResolved=recDecision?.mode==='keep'||recDecision?.mode==='edit'&&typeof recDecision.values?.rec==='string'&&(S.recs||[]).some(rec=>rec.id===recDecision.values.rec);
+    if(r.recoveryIssues?.length&&!recResolved)add('error','Tenant',nm+': '+r.recoveryIssues.join('; ')+'.',k,r.src);
     const su=iSuite(r.suite); if(su){ if(seen[su]&&seen[su]!==nm) add("warn","Tenant",`Suite ${r.suite} appears for both ${seen[su]} and ${nm}.`,k,r.src); else seen[su]=nm; }
     if(!sf) add("error","Tenant",`${nm}: no area.`,k,r.src);
     if(r.vacant||/vacant/i.test(r.status||"")) continue;
@@ -7809,6 +7996,8 @@ function intChecks(X,docs){ const out=[], add=(sev,area,msg,key,src)=>out.push({
   const NONOP=/capital|capex|replacement|tenant improvement|\bti\b|leasing commission|depreciat|amortiz|interest|debt service|mortgage|income tax|asset management|reserve/i;
   let tot=0;
   for(const g of X.expenses){ const e=g.r; if(!e) continue; const k="e:"+g.key;
+    if(e.ambiguousRows)add('error','Expenses',e.name+': multiple independent rows in one file cannot be combined automatically. Leave unchecked and enter separate reviewed detail lines manually.',k,e.src);
+    if(e.ambiguousTargets&&(!e.match||!e.matchCandidates?.includes(e.match)||(S.ops||[]).every(o=>o.id!==e.match)))add('error','Expenses',e.name+': several existing expense lines match. A valid explicit target or manual entry is required.',k,e.src);
     if(e.basis==="total") tot+=num(e.amount);
     if(!(num(e.amount)>0)) add("warn","Expenses",`${e.name}: amount of ${e.amount}.`,k,e.src);
     if(e.annualized) add("info","Expenses",`${e.name}: annualized from ${e.months} months; seasonal costs (snow, utilities) may not scale evenly.`,k,e.src);
@@ -7827,9 +8016,10 @@ function intChecks(X,docs){ const out=[], add=(sev,area,msg,key,src)=>out.push({
   const V=X.valuation||{}, vv=k=>V[k]?V[k].v:null;
   if(vv("exitCap")!==null&&vv("goingInCap")!==null&&vv("exitCap")<vv("goingInCap")-0.005) add("info","Valuation",`The exit cap (${(vv("exitCap")*100).toFixed(2)}%) is below the going-in cap (${(vv("goingInCap")*100).toFixed(2)}%).`,"v:exitCap",V.exitCap.src);
   if(vv("discountRate")!==null&&vv("exitCap")!==null&&vv("discountRate")<vv("exitCap")) add("warn","Valuation",`The discount rate (${(vv("discountRate")*100).toFixed(2)}%) is below the exit cap (${(vv("exitCap")*100).toFixed(2)}%).`,"v:discountRate",V.discountRate.src);
+  for(const loan of X.debt||[]){const issues=intDebtIssues(loan);if(issues.length)add('error','Debt',loan.name+': confirm '+issues.join('; ')+'. Enter complete loan terms manually in Debt Financing.','d:'+loan.key,loan.src);}
   const ord={error:0,warn:1,info:2}; return out.sort((a,b)=>ord[a.sev]-ord[b.sev]); }
 function intReview(X){
-  const kids=[], nT=X.tenants.length, nE=X.expenses.length, CK=intChecks(X,INT.docs), byKey={};
+  const kids=[], nT=X.tenants.length, nE=X.expenses.length, CK=intChecks(X,INT.docs,INT.review||{}), byKey={};
   if(!intTargetCurrent(INT.target))kids.push(el("p",{class:"note err",role:"alert",text:"The model changed after extraction. Extract again before applying these results."}));
   for(const c of CK) if(c.key) (byKey[c.key]=byKey[c.key]||[]).push(c);
   const nErr=CK.filter(c=>c.sev==="error").length, nWarn=CK.filter(c=>c.sev==="warn").length, nInfo=CK.length-nErr-nWarn;
@@ -7857,7 +8047,7 @@ function intReview(X){
       e.basis==="pct"?"% of EGR":e.basis==="psf"?"$/SF/yr":"$/yr"+(e.annualized?" (from "+e.months+" mo)":""),e.recov===null?"?":e.recov?"yes":"no",intSrcLabel(e.src),
       e.keepPct?"model keeps its "+(100*num(e.keepPct.amt)).toFixed(1)+"% of EGR fee":e.match?"updates":"new"]}; })));
   if(X.other.length) kids.push(el("h4",{text:"Other Income"}),intTable(["","Line","$/yr","Period","Source"],X.other.map(q=>({cells:[intChk("o:"+q.key),q.name,intF(q.annual),q.annualized?"Annualized from "+q.months+" Months":"Annual",intSrcLabel(q.src)]}))));
-  if(X.capital.length) kids.push(el("h4",{text:"Capital"}),intTable(["","Item","Amount","Date","Source"],X.capital.map(q=>({cells:[intChk("c:"+q.key),q.name,intF(q.amount),q.date?mdy(q.date):"year 1",intSrcLabel(q.src)]}))));
+  if(X.capital.length) kids.push(el("h4",{text:"Capital"}),intTable(["","Item","Amount","Date","Source"],X.capital.map(q=>({cells:[intChk("c:"+q.key),q.name,intF(q.amount),q.date?mdy(q.date):"Date Needed",intSrcLabel(q.src)]}))));
   const mv=[...Object.keys(X.market).map(k=>({k:"mk:"+k,f:"Market "+k,v:X.market[k].v,s:X.market[k].src})),...Object.keys(X.valuation).map(k=>({k:"v:"+k,f:"Valuation "+k,v:X.valuation[k].v,s:X.valuation[k].src}))];
   if(mv.length) kids.push(el("h4",{text:"Market and Valuation"}),intTable(["Include","Input","Current","Proposed","Source"],mv.map(q=>({cells:[intChk(q.k),q.f,basisIntakeValue(basisCurrentInput(q.k.split(':')[1]),q.k.split(':')[1]),basisIntakeValue(q.v,q.k.split(':')[1]),basisSourceCell(q.s)]}))));
   if(X.profiles.length) kids.push(el("h4",{text:"Market leasing profiles"}),intTable(["","Profile","Rent $/SF","Renewal","Months vacant","Term","TI new/renew","LC","Source"],
@@ -8133,11 +8323,10 @@ async function x4ReadTemplate(buf,inflate){
   const isDateFmt=id=>(id>=14&&id<=22)||(id>=45&&id<=47)||(fmt[id]!==undefined&&/[dmy]/i.test(fmt[id].replace(/"[^"]*"|\[[^\]]*\]/g,"")));
   const xfs=styles&&intTags(styles,"cellXfs")[0],DATE=new Set();
   if(xfs)intTags(xfs,"xf").forEach((format,i)=>{if(isDateFmt(+(format.getAttribute("numFmtId")||0)))DATE.add(i);});
-  const rels=Object.create(null); for(const m of txt("xl/_rels/workbook.xml.rels").matchAll(/<Relationship\b[^>]*>/g)){ const id=(/Id="([^"]+)"/.exec(m[0])||[])[1], tg=(/Target="([^"]+)"/.exec(m[0])||[])[1]; if(id&&tg) rels[id]=tg.replace(/^\/?xl\//,"").replace(/^\//,""); }
   const T={files,SST,DATE,dateStyle:[...DATE][0],date1904,sheets:Object.create(null),order:[],version:"",portfolio:"",property:""},budget={cells:0};
-  for(const m of txt("xl/workbook.xml").matchAll(/<sheet\b[^>]*\/>/g)){ const name=x4unesc((/name="([^"]*)"/.exec(m[0])||[])[1]||""), rid=(/r:id="([^"]+)"/.exec(m[0])||/\bid="([^"]+)"/.exec(m[0])||[])[1];
+  for(const sheet of intTags(workbook,"sheet")){ const name=sheet.getAttribute("name")||"",rid=sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id")||sheet.getAttribute("r:id")||sheet.getAttribute("id");
     if(!rid||!Object.prototype.hasOwnProperty.call(validatedRels,rid))throw Error("Workbook worksheet relationship is missing or external");
-    const path="xl/"+rels[rid],x=txt(path),doc=intXML(x,"Workbook worksheet ("+name+")","worksheet");
+    const path=intPath("xl/",validatedRels[rid]),x=txt(path),doc=intXML(x,"Workbook worksheet ("+name+")","worksheet");
     if(T.order.includes(name))throw Error("Workbook contains a duplicate worksheet name");T.order.push(name);
     const rows=[],seenRows=new Set(),bounds=officeSheetBounds(budget);let nextRow=1;
     for(const row of intTags(doc,"row")){
@@ -8191,19 +8380,37 @@ function x4CellXml(ref,v,s,T){ const sa=s?` s="${s}"`:"";
   if(typeof v==="number"&&isFinite(v)) return `<c r="${ref}"${sa}><v>${String(v)}</v></c>`;
   const str=String(v); return `<c r="${ref}"${sa} t="inlineStr"><is><t${/^\s|\s$/.test(str)?' xml:space="preserve"':""}>${x4esc(str)}</t></is></c>`; }
 async function x4WriteWorkbook(T,A,deflate,stamp){ const te=new TextEncoder(), td=new TextDecoder(); const byPath={}; for(const [nm,s] of Object.entries(T.sheets)) if(s.adw) byPath[s.path]=nm;
+  const serializer=new XMLSerializer(),replacePart=(text,label,root,remove)=>{
+    const doc=intXML(text,label,root);for(const child of Array.from(doc.documentElement.children))if(remove(child))child.parentNode.removeChild(child);return serializer.serializeToString(doc);
+  };
   const out=[]; for(const f of T.files){ if(f.name==="xl/calcChain.xml") continue; let data=f.data; const sh=byPath[f.name];
-    if(f.name==="[Content_Types].xml") data=te.encode(td.decode(data).replace(/<Override[^>]*calcChain[^>]*\/>/g,""));
-    if(f.name==="xl/_rels/workbook.xml.rels") data=te.encode(td.decode(data).replace(/<Relationship[^>]*calcChain[^>]*\/>/g,""));
-    if(sh){ const t=T.sheets[sh]; let x=td.decode(data); const rows=A.sheets[sh]||[]; const i0=x.indexOf("<sheetData"), i1=x.indexOf("</sheetData>");
-      if(i0>=0){ const open=x.indexOf(">",i0)+1, inner=i1>open?x.slice(open,i1):""; const keep=[];
-        for(const rm of inner.matchAll(/<row\b[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g)){ const r=+((/\br="(\d+)"/.exec(rm[0])||[])[1]||0); if(r>t.colRow) continue;
-          keep.push({r,x:rm[0]}); }
-        if(stamp){ const hr=keep.find(k=>k.r===4); if(hr&&t.head&&t.head.TIMESTAMP!==undefined) hr.x=hr.x.replace(/<c r="B4"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/,`<c r="B4" t="inlineStr"><is><t>${x4esc(stamp)}</t></is></c>`); }
-        let lastCol=0; const gen=rows.map((a,i)=>{ const r=t.colRow+1+i; let cx=""; a.forEach((v,j)=>{ if(j===0) return; const c=x4CellXml(x4colRef(j)+r,v,t.style[j]||0,T); if(c){ cx+=c; if(j>lastCol) lastCol=j; } }); return `<row r="${r}">${cx}</row>`; });
-        const body=keep.map(k=>k.x).join("")+gen.join(""); const lastRow=rows.length?t.colRow+rows.length:t.colRow;
-        x=x.slice(0,i0)+(i1>open?x.slice(i0,open):"<sheetData>")+body+"</sheetData>"+(i1>open?x.slice(i1+12):x.slice(open));
-        x=x.replace(/<dimension ref="[^"]*"\/>/,`<dimension ref="A1:${x4colRef(Math.max(lastCol,t.cols.length-1))}${lastRow}"/>`); }
-      data=te.encode(x); }
+    if(f.name==="[Content_Types].xml") data=te.encode(replacePart(td.decode(data),"Workbook content types","Types",node=>node.localName==="Override"&&intPath("",node.getAttribute("PartName"))==="xl/calcChain.xml"));
+    if(f.name==="xl/_rels/workbook.xml.rels") data=te.encode(replacePart(td.decode(data),"Workbook relationships","Relationships",node=>node.localName==="Relationship"&&intPath("xl/",node.getAttribute("Target"))==="xl/calcChain.xml"));
+    if(sh){ const t=T.sheets[sh],rows=A.sheets[sh]||[],doc=intXML(td.decode(data),"Workbook worksheet ("+sh+")","worksheet");
+      const parts=Array.from(doc.documentElement.children).filter(node=>node.localName==="sheetData");
+      if(parts.length!==1)throw Error("Workbook worksheet ("+sh+") must contain exactly one sheetData element");
+      const sheetData=parts[0],namespace=sheetData.namespaceURI||"",keep=[];let nextRow=1;
+      for(const row of Array.from(sheetData.children).filter(node=>node.localName==="row")){
+        const r=officeSheetRow(row.getAttribute("r"),nextRow);nextRow=r+1;if(r<=t.colRow)keep.push(serializer.serializeToString(row));
+      }
+      let lastCol=0;const gen=rows.map((a,i)=>{const r=t.colRow+1+i;let cells="";
+        a.forEach((v,j)=>{if(j===0)return;const cell=x4CellXml(x4colRef(j)+r,v,t.style[j]||0,T);if(cell){cells+=cell;lastCol=Math.max(lastCol,j);}});return `<row r="${r}">${cells}</row>`;
+      });
+      const replacement=intXML(`<sheetData${namespace?` xmlns="${x4esc(namespace)}"`:""}>${keep.join("")}${gen.join("")}</sheetData>`,"Exported workbook rows","sheetData");
+      if(stamp&&t.head&&t.head.TIMESTAMP!==undefined){
+        let next=1;for(const row of Array.from(replacement.documentElement.children).filter(node=>node.localName==="row")){
+          const r=officeSheetRow(row.getAttribute("r"),next);next=r+1;if(r!==4)continue;
+          const cell=Array.from(row.children).find(node=>node.localName==="c"&&node.getAttribute("r")==="B4");
+          if(cell){const stamped=intXML(`<c${namespace?` xmlns="${x4esc(namespace)}"`:""} r="B4" t="inlineStr"><is><t>${x4esc(stamp)}</t></is></c>`,"Workbook timestamp","c");row.replaceChild(replacement.importNode(stamped.documentElement,true),cell);}break;
+        }
+      }
+      // Retain the original element and all producer/markup-compatibility
+      // attributes and namespace declarations while replacing only its rows.
+      for(const child of Array.from(sheetData.childNodes))sheetData.removeChild(child);
+      for(const row of Array.from(replacement.documentElement.children))sheetData.appendChild(doc.importNode(row,true));
+      const lastRow=rows.length?t.colRow+rows.length:t.colRow,dimension=Array.from(doc.documentElement.children).find(node=>node.localName==="dimension");
+      if(dimension)dimension.setAttribute("ref",`A1:${x4colRef(Math.max(lastCol,t.cols.length-1))}${lastRow}`);
+      data=te.encode(serializer.serializeToString(doc)); }
     out.push({name:f.name,data}); }
   return x4Zip(out,deflate); }
 
@@ -8762,7 +8969,10 @@ function basisBuildReportPackage(model,result,context={}){
     const item={name,rows,widths};sheets.push(item);return item;
   };
   const fmt=(name,r,c,type)=>formats.push([name,r,c,type]);
-  const number=value=>value===undefined||value===null||value===''?0:Number(value);
+  // Native/legacy models may retain formatted numeric text. Normalize the same
+  // currency/grouping characters as the engine, but keep nonfinite or partial
+  // values invalid so report validation still rejects them.
+  const number=value=>value===undefined||value===null||value===''?0:Number(typeof value==='string'?value.replace(/[$,\s%]/g,''):value);
   const finiteOrBlank=value=>typeof value==='number'&&Number.isFinite(value)?value:null;
   const lookup=(key,id)=>(model[key]||[]).find(x=>x.id===id)?.name||id||'';
   const groups=t=>basisTenantGroupIds(t).map(id=>lookup('tgroups',id)).join('; ');
@@ -10369,7 +10579,7 @@ async function pwActionCopyModels(ix,sources,pfId,scId,rename){pwActionTarget(ix
   for(const source of sources){const live=ix.props.find(p=>p.id===source.rec.id);if(!live||live.pf!==source.rec.pf||live.sc!==source.rec.sc)throw Error("A selected property moved or was removed. Review the selection and try again.");
     const stored=source.json===null?await pwGetModel(source.rec.id,source.rec):null,json=source.json===null?stored&&stored.json:source.json;if(!json)throw Error("A selected property could not be loaded");const model=JSON.parse(json);basisValidateModel(model);
     if(rename)model.name=pwUniq("Copy of "+(model.name||"Untitled"),ix.props.filter(p=>p.pf===pfId&&p.sc===scId).map(p=>p.name));
-    const id=pwId(),saved=Date.now(),copy=Object.assign({},source.rec,pwMetaOf(model,null),{id,pf:pfId,sc:scId,saved,by:PW_DEV,sf:source.rec.sf,pv:source.rec.pv,noi:source.rec.noi});delete copy.storageKey;ix.props.push(copy);models.push({id,json:JSON.stringify(model),saved});ids.push(id);
+    const id=pwId(),saved=Date.now(),copy=Object.assign({},source.rec,pwCalcMeta(model),{id,pf:pfId,sc:scId,saved,by:PW_DEV});delete copy.storageKey;ix.props.push(copy);models.push({id,json:JSON.stringify(model),saved});ids.push(id);
   }return {models,ids};}
 async function pwCreatePortfolio(name,scenarioName="Base Scenario"){const title=pwActionName(name),scenario=pwActionName(scenarioName);await PW.ready;return pwEnq(async()=>{const ix=pwIxCopy(),id=pwId();ix.pfs.push({id,name:pwUniq(title,ix.pfs.map(p=>p.name)),scs:[{id:pwId(),name:scenario,settings:basisScenarioSettings(null)}]});const committed=await pwCommit(ix);pwActionPublish(committed);return id;});}
 async function pwRenameRecord(kind,id,name,pfId){const title=pwActionName(name);if(!["portfolio","scenario"].includes(kind))throw Error("Unsupported library item");await PW.ready;return pwEnq(async()=>{const ix=pwIxCopy(),pf=kind==="portfolio"?pwActionTarget(ix,id):pwActionTarget(ix,pfId),item=kind==="portfolio"?pf:pf.scs.find(s=>s.id===id);if(!item)throw Error("The selected scenario is no longer in the library");item.name=title;const committed=await pwCommit(ix);pwActionPublish(committed);return id;});}
@@ -10420,8 +10630,17 @@ function pwActivate(pid,st){ basisWorkspaceId(pid,"property ID");basisValidateMo
   if(r){ PW.pf=L.pf=r.pf; PW.sc=L.sc=r.sc; }
   pwLocalSave();
   recalc(); renderKPI(); drawPane(); pwStatus("Saved"); }
-async function pwLoadJson(pid){ const c=PW.cache.get(pid); if(c) return c; await PW.q; const m=await pwGetModel(pid); if(!m) return null;
-  pwCacheSet(pid,m.json); if(!PW.local.synced[pid]||PW.local.synced[pid]<m.saved) PW.local.synced[pid]=m.saved; return m.json; }
+async function pwLoadJson(pid){ const c=PW.cache.get(pid); if(c) return c; await PW.q;
+  const queued=PW.cache.get(pid);if(queued)return queued;
+  const version=PW.cacheVersions.get(pid)||0,revision=PW.rev,index=PW.ix,source=pwBackendSnapshot();
+  const m=await pwGetModel(pid,undefined,source),latest=PW.cache.get(pid),newer=(PW.cacheVersions.get(pid)||0)!==version;
+  const sameBackend=source.kind===PWS.kind&&source.db===PWS.db&&source.uid===PWS.uid&&source.idb===PWS.idb&&(source.kind!=="memory"||source.mem===PW.mem);
+  // A delayed preload must never replace a model saved or reloaded meanwhile.
+  if(!sameBackend||PW.ix!==index||PW.rev!==revision||newer){
+    if(sameBackend&&newer&&latest)return latest;
+    throw Error("The property or library changed while loading. Try opening it again.");
+  }
+  if(!m)return null;pwCacheSet(pid,m.json); if(!PW.local.synced[pid]||PW.local.synced[pid]<m.saved) PW.local.synced[pid]=m.saved; return m.json; }
 async function pwRefreshLibrary(){ await PW.q;
   const source=PW.recoverySource||pwBackendSnapshot(),recoveryModels=!!(PW.recoverySource&&PW.ix&&PW.ix.props.length),dirty=PW.conflict||!!PW.local.edited||recoveryModels;
   if(dirty&&!(await kConfirm(recoveryModels?"Reload the saved library and leave this in-memory recovery workspace? Export its portfolio first to keep its properties.":"Reload the saved library and discard this tab's unsaved edits? Export the current model first if you want to keep those edits.","Reload library",false)))return false;
@@ -10585,7 +10804,19 @@ async function pwImportFiles(files){const context=pwActionContext(),batch=[...fi
     for(const p of r.props){pwActionTarget(PW.ix,context.pf,context.sc);await pwAdopt(Object.assign({},p.st,{portfolio:[]}),{pf:context.pf,sc:context.sc,quiet:true});added++;}
   }catch(e){errs.push(file.name+": "+(e.message||e));}}
   drawPane();if(errs.length)kAlert(errs.join("\n"));return added;}
-async function pwRecalcAll(){const sources=pwActionSources(pwList().map(p=>p.id));await PW.ready;await pwEnq(async()=>{const ix=pwIxCopy();for(const source of sources){const rec=ix.props.find(p=>p.id===source.rec.id);if(!rec||rec.pf!==source.rec.pf||rec.sc!==source.rec.sc||rec.saved!==source.rec.saved||rec.storageKey!==source.rec.storageKey)throw Error("A selected property changed. Refresh the scenario and try again.");const stored=source.json===null?await pwGetModel(source.rec.id,source.rec):null,json=source.json===null?stored&&stored.json:source.json;if(!json)throw Error("A property could not be loaded for recalculation");const model=JSON.parse(json);basisValidateModel(model);const values=pwCalcMeta(model);Object.assign(rec,{sf:values.sf,pv:values.pv,noi:values.noi});}const committed=await pwCommit(ix);pwActionPublish(committed);});pwStatus("Values recalculated");drawPane();}
+async function pwRecalcAll(){const context=pwActionContext(),sources=pwActionSources(pwList().map(p=>p.id));await PW.ready;await pwEnq(async()=>{
+    const stable=()=>pwSameContext(context)&&PW.rev===context.rev;
+    if(!stable())throw Error("The current property or scenario changed. Review it and recalculate again.");
+    const ix=pwIxCopy(),models=[];
+    for(const source of sources){const rec=ix.props.find(p=>p.id===source.rec.id);if(!rec||rec.pf!==source.rec.pf||rec.sc!==source.rec.sc||rec.saved!==source.rec.saved||rec.storageKey!==source.rec.storageKey)throw Error("A selected property changed. Refresh the scenario and try again.");
+      const stored=source.json===null?await pwGetModel(source.rec.id,source.rec):null,json=source.json===null?stored&&stored.json:source.json;if(!json)throw Error("A property could not be loaded for recalculation");
+      const model=JSON.parse(json);basisValidateModel(model);const values=pwCalcMeta(model);
+      if(source.rec.id===context.cur){const saved=Date.now();Object.assign(rec,values,{saved,by:PW_DEV});models.push({id:rec.id,json,saved,cacheVersion:context.cacheVersion});}
+      else Object.assign(rec,{sf:values.sf,pv:values.pv,noi:values.noi});
+    }
+    if(!stable())throw Error("The current property or scenario changed. Review it and recalculate again.");
+    const committed=await pwCommit(ix,models);pwActionPublish(committed,models);
+  });pwStatus("Values recalculated");drawPane();}
 async function pwAdoptMembers(){const context=pwActionContext(),source=JSON.parse(context.json),members=(source.portfolio||[]).filter(m=>m&&m.model).map(m=>Object.assign({},m.model,{name:m.model.name||m.name,portfolio:[]}));if(!members.length)return;for(const model of members)basisValidateModel(model);const finalModel={...source,portfolio:[]},finalJson=JSON.stringify(finalModel);await PW.ready;
   await pwEnq(async()=>{if(!pwSameContext(context)||PW.rev!==context.rev)throw Error("The current property changed. Review its portfolio members and try again.");const ix=pwIxCopy();pwActionTarget(ix,context.pf,context.sc);const models=[];
     if(context.cur){const rec=ix.props.find(p=>p.id===context.cur);if(!rec)throw Error("The current property is no longer in the library");const saved=Date.now();Object.assign(rec,pwCalcMeta(finalModel),{saved,by:PW_DEV});models.push({id:context.cur,json:finalJson,saved,cacheVersion:context.cacheVersion});}
@@ -11545,7 +11776,7 @@ function basisModelIssues(model=S,result=R){
   return issues;
 }
 function basisCheckDestination(issue){
-  const target=issue.target||{},routes={tenants:['tenants','rr'],areas:['property','desc'],infl:['market','infl'],ops:['expenses','op'],mlas:['market','ml'],position:['valuation','pos']};
+  const target=issue.target||{},routes={tenants:['tenants','rr'],areas:['property','desc'],infl:['market','infl'],ops:['expenses','op'],mlas:['market','ml'],loans:['investment','debt'],position:['valuation','pos']};
   const categories={'Analysis':['property','desc'],'Engine':['property','desc'],'Area':['property','desc'],'Inflation':['market','infl'],'Expenses':['expenses','op'],
     'Market leasing':['market','ml'],'Rent roll':['tenants','rr'],'Recoveries':['tenants','recov'],'Occupancy':['tenants','rr'],
     'Ground lease':['valuation','pos'],'Cash flow':['tenants','rr'],'Valuation':['valuation','pvset']};
@@ -11647,7 +11878,9 @@ function basisMapReviewedTenant(tenant,record,key,review,log,notes){
   }
   const inputs={rec:'rec',deposit:'sd',improvements:'ti',commissions:'lc',option:'opts',termination:'term',percentage:'pr',abatement:'free',free:'free',note:'other'};
   for(const [group,source] of Object.entries(inputs))if(decisions[group]?.mode==='keep')input[source]=source==='opts'?[]:null;
+  if(decisions.rec?.mode==='edit'&&typeof decisions.rec.values?.rec==='string'&&recs.has(decisions.rec.values.rec))input.rec=null;
   const generated=[],mapped=intMapTenant(tenant,input,(...args)=>generated.push(args),notes),blocked=[];
+  if(mapped.recoveryBlocked)blocked.push(mapped.recoveryBlocked);
   for(const [group,message]of Object.entries(mapped.amendmentBlocked||{})){const d=decisions[group];if(d?.mode==='keep'||d?.mode==='edit'&&(group==='rent'?Object.hasOwn(d.values||{},'sched'):typeof d.values?.rec==='string'&&recs.has(d.values.rec)))continue;blocked.push(message+' Choose Keep Current Value or enter a complete correction for '+(group==='rent'?'Rent Terms':'Recoveries')+'.');}
   const proposed=basisReviewClone(tenant);if(record.sf>0)proposed.sf=record.sf;
   for(const [group,decision] of Object.entries(decisions)){
@@ -11671,7 +11904,7 @@ function basisMapReviewedTenant(tenant,record,key,review,log,notes){
     const group=Object.keys(BASIS_REVIEW_GROUPS).find(g=>BASIS_REVIEW_GROUPS[g].includes(field))||field,edited=decisions[group]?.mode==='edit';
     log(tenant.name+' · '+field,(edited?'Manual correction: ':'')+basisReviewDisplay(tenant[field],field,tenant,S),basisIntakeFieldSources(mapped,field));
   }
-  return {key,before,proposed,blocked,amendmentNotes:mapped.amendmentNotes||[],amendedGroups:[...(record.rentChanges?.length?['rent']:[]),...(record.recoveryChanges?.length?['rec']:[])],after:basisReviewClone(tenant),source:record.src,sources:record.srcs||[],fieldSources:mapped.fieldSources||{},annual:(()=>{const step=mapped.steps?.[0];return Number.isFinite(step?.psf)&&tenant.sf>0?step.psf*tenant.sf:step?.annual;})()};
+  return {key,before,proposed,blocked,amendmentNotes:[...(mapped.amendmentNotes||[]),...(mapped.recoveryBlocked?[mapped.recoveryBlocked]:[])],amendedGroups:[...(record.rentChanges?.length?['rent']:[]),...(record.recoveryChanges?.length||mapped.recoveryBlocked?['rec']:[])],after:basisReviewClone(tenant),source:record.src,sources:record.srcs||[],fieldSources:mapped.fieldSources||{},annual:(()=>{const step=mapped.steps?.[0];return Number.isFinite(step?.psf)&&tenant.sf>0?step.psf*tenant.sf:step?.annual;})()};
 }
 function basisReviewDisplay(value,field,tenant,model){
   if(field==='rentBasis')return ({psfyr:'$/SF/Year',psfmo:'$/SF/Month',yramt:'$/Year',moamt:'$/Month'}[value]||(!value?'Default: $/SF/Year':String(value)));
@@ -11713,7 +11946,7 @@ function basisTenantFieldReview(){
       const display=basisReviewClone(INT.review||{});for(const groups of Object.values(display))for(const [key,decision] of Object.entries(groups)){if(key==='$target')continue;delete decision.invalid;if(decision.mode==='edit'&&key!=='sf')decision.values={};}
       prepared=intPrepareApply(JSON.parse(INT.target.json),INT.x,INT.pick,INT.mode,display);
     }
-    const checks=intChecks(INT.x,INT.docs),priority=key=>checks.some(c=>c.key==='t:'+key&&c.sev==='error')?0:checks.some(c=>c.key==='t:'+key&&c.sev==='warn')?1:2;
+    const checks=intChecks(INT.x,INT.docs,INT.review||{}),priority=key=>checks.some(c=>c.key==='t:'+key&&c.sev==='error')?0:checks.some(c=>c.key==='t:'+key&&c.sev==='warn')?1:2;
     const reviews=prepared.tenantReviews.sort((a,b)=>priority(a.key)-priority(b.key));
     for(const review of reviews){
       const {$target,...decisions}=INT.review?.[review.key]||{},groups=[...new Set([...basisReviewGroups(review.before,review.proposed),...(review.amendedGroups||[]),...Object.keys(decisions)])];
@@ -12270,7 +12503,7 @@ function basisIntakeReconciliationView(checks){
 /* END BASIS INTAKE RECONCILIATION */
 
 /* BEGIN BASIS BETA UI */
-const BASIS_BETA_VERSION='0.7.28';
+const BASIS_BETA_VERSION='0.7.29';
 function basisBetaSupportInfo(){
   // Explicit allowlist: never serialize property data, source documents, keys,
   // browser storage, page URLs, provider settings or raw error messages.
@@ -14101,16 +14334,17 @@ function calc(S){
   const ACT=new Map(), BUD=new Map(), aBase=num(S.startYear)*12+(num(S.startMonth)||1)-1;
   if(actK>=0) for(const a of (S.actuals||[])) if(a&&a.line){ const mp=atlParse(a.data); if(mp.size) ACT.set(a.line,mp); }
   if(budK>actK) for(const b of (S.budgets||[])) if(b&&b.line){ const mp=atlParse(b.data); if(mp.size) BUD.set(b.line,mp); }
-  const applyAct=(key,arr,also)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
-    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; } } };
+  const revenueOverrideMonths=new Set();
+  const applyAct=(key,arr,also,revenue=false)=>{ for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]){ const mp=MP.get(key); if(!mp) continue;
+    for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ const v=mp.get(aBase+i); if(v===undefined) continue; const d=v-arr[i]; arr[i]=v; for(const b of also) b[i]+=d; if(revenue) revenueOverrideMonths.add(i); } } };
   if(ACT.size||BUD.size){
-    applyAct("rent",sched,[gpr,tpgr,egr]); applyAct("reimb",reimb,[tpgr,egr]); applyAct("cpi",cpiRev,[tpgr,egr]); applyAct("pr",prM,[tpgr,egr]);
+    applyAct("rent",sched,[gpr,tpgr,egr],true); applyAct("reimb",reimb,[tpgr,egr],true); applyAct("cpi",cpiRev,[tpgr,egr],true); applyAct("pr",prM,[tpgr,egr],true);
     [[miscL,miscT,S.misc,"misc"],[parkL,parkT,S.parking,"park"],[storL,storT,S.storage,"stor"]].forEach(([LL,T,src,k])=>LL.forEach((x,j)=>{
-      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr]); }));
+      const d=x.def||(src||[])[j]; if(d&&d.id) applyAct(k+":"+d.id,x.m,d.refOnly?[]:[T,tpgr,egr],!d.refOnly); }));
     for(const x of opLines) if(x.def.id) applyAct("op:"+x.def.id,x.m,x.def.refOnly?[]:[opTot]);
-    const revK=/^(rent|reimb|cpi|pr|misc|park|stor)/;   // months carried by revenue actuals or budgets have no general vacancy or credit loss
-    for(const [MP,lo,hi] of [[ACT,0,actK],[BUD,actK+1,budK]]) if(S.actNoVac!==false&&[...MP.keys()].some(k=>revK.test(k)))
-      for(let i=Math.max(lo,0);i<=Math.min(hi,nM-1);i++){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
+    // Only supplied, cash-flow revenue values are already net of vacancy/loss.
+    // Missing forecast months and reference-only lines keep their existing policy.
+    if(S.actNoVac!==false) for(const i of revenueOverrideMonths){ egr[i]+=genVac[i]+credit[i]; genVac[i]=0; credit[i]=0; }
   }
   const noi=Z(); for(let i=0;i<nM;i++) noi[i]=egr[i]-opTot[i];
 
@@ -14131,7 +14365,7 @@ function calc(S){
   const leasing=Z(),cfbds=Z();
   for(const [LL,T] of [[capLines,capTot],[nonLines,nonTot]]) for(const x of LL){ const nv=paySpreadLine(S,x.m,x.def); if(!nv) continue;
     if(!(x.def&&x.def.refOnly)) for(let i=0;i<nM;i++) T[i]+=nv[i]-x.m[i]; x.m.set(nv); }
-  if(ACT.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
+  if(ACT.size||BUD.size){ applyAct("ti",tiM,[]); applyAct("lc",lcM,[]);
     capLines.forEach(x=>{ if(x.def.id) applyAct("cap:"+x.def.id,x.m,x.def.refOnly?[]:[capTot]); }); nonLines.forEach(x=>{ if(x.def.id) applyAct("non:"+x.def.id,x.m,x.def.refOnly?[]:[nonTot]); }); }
   const LINEM={rent:sched,reimb,cpi:cpiRev,pr:prM,ti:tiM,lc:lcM};
   for(const [LL,k] of [[opLines,"op"],[capLines,"cap"],[nonLines,"non"]]) LL.forEach(x=>{ if(x.def.id) LINEM[k+":"+x.def.id]=x.m; });
@@ -14211,6 +14445,19 @@ function calc(S){
    return premium and an exit cap 25-50bp wide of fee simple, while the leased fee is a
    bond-like stream capped at its own rate. The deck's warning that "A + B does not always
    equal C" is the point of the comparison, not a rounding error to be reconciled away. */
+function positionYearIssues(S){
+  const P=S.pos||{}, issues=[];
+  const whole=(key,label,allowEmpty)=>{
+    const raw=P[key], empty=raw===undefined||raw===null||typeof raw==="string"&&raw.trim()==="";
+    const n=typeof raw==="number"?raw:typeof raw==="string"&&raw.trim()!==""?Number(raw):NaN;
+    if(allowEmpty&&(empty||n===0)) return;
+    if(!Number.isFinite(n)||!Number.isInteger(n)||n<=0) issues.push({key,message:label+" must be a positive whole number of years."});
+  };
+  if(P.resetOn){ whole("resetFirst","First ground-rent reset",true); whole("resetEvery","Ground-rent reset interval",true); }
+  if(P.cpiOn) whole("cpiEvery","CPI catch-up interval",true);
+  if(P.optOn) whole("optYear","Ground-lease purchase-option year",false);
+  return issues;
+}
 function calcPositions(S,R){
   if(!R) return null;
   const P=S.pos||{}, nM=R.nM, nY=R.nY, sf=R.sf||1, A=R.ann;
@@ -14221,21 +14468,30 @@ function calcPositions(S,R){
   const baseGR=gr.slice();
   // NOI before ground rent — what both positions are really carved out of
   const noiPre=Z();
-  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+gr[i];
+  // Non-operating ground rent is already below NOI; only add back the portion
+  // actually deducted when arriving at NOI.
+  for(let i=0;i<nM;i++) noiPre[i]=(R.noiM?R.noiM[i]:0)+(R.glOpM?R.glOpM[i]:0);
 
   /* FMV reset: ground rent is re-struck as a percentage of land value, usually with a
      cap, because an uncapped reset is the clause that cost Lever House its leasehold. */
   const resetYrs=[];
-  if(P.resetOn&&num(P.resetEvery)>0)
-    for(let y=num(P.resetFirst)||10;y<nY;y+=num(P.resetEvery)) resetYrs.push(y);
+  const timingIssues=positionYearIssues(S), badTiming=new Set(timingIssues.map(issue=>issue.key));
+  if(P.resetOn&&!badTiming.has("resetFirst")&&!badTiming.has("resetEvery")&&num(P.resetEvery)>0){
+    const first=num(P.resetFirst)||10, every=num(P.resetEvery);
+    // Inspect only the finite analysis years. Iterating from an imported first
+    // reset or by a tiny interval can otherwise take unbounded work.
+    for(let y=0;y<nY;y++) if(y>=first&&(y-first)%every===0) resetYrs.push(y);
+  }
   /* CPI catch-up: periodically the lesser of the index move over the period and a
      compounded ceiling. */
   const cpiYrs=[];
-  if(P.cpiOn&&num(P.cpiEvery)>0)
-    for(let y=num(P.cpiEvery);y<nY;y+=num(P.cpiEvery)) cpiYrs.push(y);
+  if(P.cpiOn&&!badTiming.has("cpiEvery")&&num(P.cpiEvery)>0){
+    const every=num(P.cpiEvery);
+    for(let y=0;y<nY;y++) if(y>=every&&y%every===0) cpiYrs.push(y);
+  }
 
   const events=[];
-  let cur=null;
+  let cur=null, adjusted=false;
   for(let y=0;y<nY;y++){
     const i0=y*12;
     if(cur===null) cur=gr[i0];
@@ -14256,6 +14512,7 @@ function calcPositions(S,R){
         if(want>lim){ want=lim; capNote.push("capped at "+pc(num(P.resetCapNOI),0)+" of pre-rent NOI"); }
       }
       cur=want;
+      adjusted=true;
       note="FMV reset to "+pc(num(P.resetRate),2)+" of land"+(capNote.length?" ("+capNote.join("; ")+")":"");
     }
     if(cpiYrs.includes(y)){
@@ -14264,9 +14521,13 @@ function calcPositions(S,R){
       const cap=Math.pow(1+num(P.cpiCap),per)-1;
       const up=Math.min(idx,cap);
       cur=cur*(1+up);
+      adjusted=true;
       note=(note?note+"; ":"")+"CPI catch-up "+pc(up,2)+" (lesser of index and "+pc(num(P.cpiCap),2)+" compounded)";
     }
-    if(P.resetOn||P.cpiOn) for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur;
+    // Keep the contractual schedule until an actual reset/catch-up occurs.
+    // After an event the position scenario keeps its established level-rent
+    // policy until the next event.
+    if(adjusted){ for(let k=0;k<12;k++) if(i0+k<nM) gr[i0+k]=cur; }
     else cur=gr[Math.min(i0+11,nM-1)];
     if(note) events.push({yr:S.startYear+y,note,rent:cur*12});
   }
@@ -14296,18 +14557,21 @@ function calcPositions(S,R){
   const capLF=num(P.lfCap)||0.03;
   const pvAt=(arr,rate)=>{let v=0;for(let y=0;y<nY;y++) v+=arr[y]/Math.pow(1+rate,y+1);return v;};
   // reversion on the forward NOI in the exit year
-  const noiFwdPre=aNoiPre[nY-1]*(1+num(S.exitGrowth||0.02));
-  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+num(S.exitGrowth||0.02));
+  const exitGrowth=S.exitGrowth===undefined||S.exitGrowth===null||S.exitGrowth===""?0.02:num(S.exitGrowth);
+  const noiFwdPre=aNoiPre[nY-1]*(1+exitGrowth);
+  const noiFwdLH=(aNoiPre[nY-1]-aGR[nY-1])*(1+exitGrowth);
   const revFS=capFS>0?noiFwdPre/capFS*(1-num(S.costSale)):0;
   const revLH=capLH>0?noiFwdLH/capLH*(1-num(S.costSale)):0;
 
-  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)-(A.cap?A.cap[y]:0)||v),rFS)
+  // Leasing already includes capital. Keep an actual zero net cash flow rather
+  // than replacing it with gross NOI through a truthiness fallback.
+  const feeSimple=pvAt(aNoiPre.map((v,y)=>v-(A.leasing[y]||0)),rFS)
                   +revFS/Math.pow(1+rFS,nY);
   const leasehold=pvAt(aLH,rLH)+revLH/Math.pow(1+rLH,nY);
   // the leased fee is the ground rent stream: capped, or run to an NPV when the
   // leasehold holds a purchase option at a set price
   let leasedFee, lfBasis;
-  if(P.optOn&&num(P.optYear)>0){
+  if(P.optOn&&!badTiming.has("optYear")&&num(P.optYear)>0){
     const oy=Math.min(num(P.optYear),nY);
     let v=0; for(let y=0;y<oy;y++) v+=aGR[y]/Math.pow(1+capLF,y+1);
     v+=num(P.optPrice)/Math.pow(1+capLF,oy);
@@ -14318,7 +14582,7 @@ function calcPositions(S,R){
   const rows=[];
   for(let y=0;y<nY;y++) rows.push({yr:S.startYear+y,noiPre:aNoiPre[y],gr:aGR[y],
     lh:aLH[y],ratio:aNoiPre[y]?aGR[y]/aNoiPre[y]:0});
-  return {rows,events,feeSimple,leasehold,leasedFee,lfBasis,
+  return {rows,events,...(timingIssues.length?{timingIssues}:{}),feeSimple,leasehold,leasedFee,lfBasis,
     sum:leasedFee+leasehold, gap:(leasedFee+leasehold)-feeSimple,
     grNoi:rows[0]?rows[0].ratio:0, maxRatio:rows.reduce((a,r)=>Math.max(a,r.ratio),0),
     lfFs:feeSimple?leasedFee/feeSimple:0,
@@ -14513,7 +14777,19 @@ function validateModel(S,R,onIssue){
       E("Rent roll",nm+" is set to a term length of zero","The lease has no expiry.", T("tenants",t,"termYears"));
   }
 
+  /* --- floating index units --- */
+  if(S.loanOn) for(const loan of debtLoans(S)) if(loan.rateType==="floating"){
+    try{
+      if(basisDebtCurveTokens(loan.curve).some(point=>!point.explicitPercent&&point.amount!==0&&Math.abs(point.amount)<1))
+        W("Debt",(loan.name||"Floating loan")+" has ambiguous fractional index rates",
+          "Unmarked fractions retain the legacy decimal-rate interpretation. Re-enter the curve as percentages to confirm the intended units (for example, 0.5% means one-half percent).",
+          T("loans",loan,"curve"));
+    }catch(error){ E("Debt",(loan.name||"Floating loan")+" has an invalid index curve",error.message,T("loans",loan,"curve")); }
+  }
+
   /* --- leased fee / leasehold --- */
+  for(const issue of positionYearIssues(S)) E("Ground lease",issue.message,
+    "The invalid timing assumption is not applied to the position comparison.",T("position",S.pos,issue.key));
   if((S.groundLeases||[]).length){
     const X=calcPositions(S,R);
     if(X){
@@ -14904,6 +15180,25 @@ function idxFactor(S,sr,i){ const o=idxParse(sr), k0=num(S.startYear)*12+(num(S.
   const a=idxLevel(o,k0), b=idxLevel(o,k0+12*y); return (a&&b)?b/a:1; }
 function legacyLoan(S){ return {name:"Loan",sizing:"ltv",ltv:num(S.ltv),rateType:"fixed",rate:num(S.rate),amortYears:num(S.amortYears),
   ioAll:!!S.ioOnly,ioMonths:0,feePct:num(S.loanFee),exitFeePct:0,start:"",termMonths:0,ffMax:0,ffPct:1,legacy:true}; }
+function basisDebtCurveTokens(value){
+  if(value===undefined||value===null||value==="") return [];
+  if(typeof value!=="string"&&typeof value!=="number") throw Error("Floating index curve must be a list of annual percentages.");
+  const text=String(value).trim(); if(!text) return [];
+  if(text.length>32000) throw Error("Floating index curve is too long.");
+  const parts=text.replace(/(\d)\s+%/g,"$1%").split(/[,;\s]+/).filter(Boolean);
+  if(parts.length>512) throw Error("Floating index curve contains too many annual rates.");
+  return parts.map(token=>{
+    if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?%?$/.test(token)) throw Error("Invalid floating index rate: "+token.slice(0,80)+". Enter percentages separated by commas, semicolons or spaces.");
+    const explicitPercent=token.endsWith("%"), amount=Number(explicitPercent?token.slice(0,-1):token);
+    if(!Number.isFinite(amount)) throw Error("Floating index rates must be finite numbers.");
+    return {amount,explicitPercent};
+  });
+}
+function basisNormalizeDebtCurve(value){
+  // Newly edited curve cells are labeled as percentages. Store that unit
+  // explicitly instead of guessing from whether the rate is below one.
+  return basisDebtCurveTokens(value).map(point=>String(point.amount)+"%").join("; ");
+}
 function debtLoans(S){ if(!S.loanOn) return []; return (S.loans&&S.loans.length)?S.loans.filter(l=>l.on!==false):[legacyLoan(S)]; }
 function debtPayoffAt(loans,i){ return loans.reduce((a,x)=>a+((i<x.start||i>x.maturity)?0:x.bal[i]*(1+x.xf)),0); }
 function buildDebt(S,nM,nY,basis,leaseCostM){
@@ -14918,7 +15213,8 @@ function buildDebt(S,nM,nY,basis,leaseCostM){
     const fee=amt*num(L.feePct), xf=num(L.exitFeePct);
     const x={name:L.name||"Loan",amount:amt,fee,start:s0,maturity:mat,xf,int:Z(),prin:Z(),ds:Z(),bal:Z(),draw:Z(),balloon:Z(),rate:Z(),
       rateType:L.rateType||"fixed",ioMonths:Math.round(num(L.ioMonths)||0),ioAll:!!L.ioAll,amortYears:num(L.amortYears),pmt0:null};
-    const curve=String(L.curve||"").split(/[,;\s]+/).filter(Boolean).map(v=>{ const n=parseFloat(v); return isFinite(n)?(Math.abs(n)>=1?n/100:n):0; });
+    const curve=L.rateType==="floating"?basisDebtCurveTokens(L.curve).map(point=>
+      point.explicitPercent||Math.abs(point.amount)>=1?point.amount/100:point.amount):[];
     const rateAt=i=>{ if(L.rateType!=="floating") return num(L.rate);
       const y=Math.floor(i/12), ix=curve.length?curve[Math.min(y,curve.length-1)]:0;
       let r=ix+num(L.spread); if(num(L.floor)>0) r=Math.max(r,num(L.floor)); if(num(L.cap)>0) r=Math.min(r,num(L.cap)); return r; };

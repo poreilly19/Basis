@@ -4,13 +4,13 @@ const path=require('node:path');
 const vm=require('node:vm');
 const zlib=require('node:zlib');
 const {test}=require('node:test');
-const {DOMParser}=require('./office_dom.cjs');
+const {DOMParser,XMLSerializer}=require('./office_dom.cjs');
 
 const root=path.join(__dirname,'..'),source=fs.readFileSync(path.join(root,'src/office_zip.js'),'utf8'),html=fs.readFileSync(path.join(root,'app/index.html'),'utf8');
 const functionText=(start,end)=>{const a=html.indexOf(start),b=html.indexOf(end,a);assert.ok(a>=0&&b>a,'Office ZIP adapter boundaries must exist');return html.slice(a,b);};
 const adapters=functionText('async function intUnzip(buf){','const intXML=')+functionText('const intXML=','// ---- Word:')+functionText('async function x4Unzip(buf){','// Assemble with verified workbook defaults')+functionText('function x4CellXml(','/* ---- XL4ADW input workbook');
 function setup(overrides={}){
-  const context=vm.createContext({TextEncoder,TextDecoder,Uint8Array,Uint32Array,ArrayBuffer,DataView,Blob,DecompressionStream,DOMParser,...overrides});
+  const context=vm.createContext({TextEncoder,TextDecoder,Uint8Array,Uint32Array,ArrayBuffer,DataView,Blob,DecompressionStream,DOMParser,XMLSerializer,...overrides});
   vm.runInContext(source+'\n'+adapters,context,{filename:'basis-office-zip.js'});
   const run=s=>vm.runInContext(s,context);
   return {context,run,open:bytes=>{context.input=bytes;return run('officeZipOpen(input)');}};
@@ -287,5 +287,57 @@ test('XL4ADW exports preserve each template epoch and write the corresponding da
     assert.equal(updated.date1904,epoch1904);assert.equal(updated.sheets.Leases.rows[0][3].d,'2027-03-16');
     const archive=run('officeZipOpen(output)'),workbook=Buffer.from(await archive.read('xl/workbook.xml')).toString();
     assert.equal(workbook.includes(`date1904="${setting}"`),setting!==null);
+  }
+});
+
+test('template export replaces old rows once across XML variants and preserves unrelated workbook metadata',async()=>{
+  const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main',pkg='http://schemas.openxmlformats.org/package/2006/relationships',rel='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const mc='http://schemas.openxmlformats.org/markup-compatibility/2006';
+  const sheet=`<worksheet xmlns="${ns}"><sheetPr codeName="KeepThis"/><dimension ref="A1:D6"/><cols><col min="2" max="2" width="25" customWidth="1"/></cols><sheetData xmlns:mc="${mc}" xmlns:custom="urn:producer" mc:Ignorable="custom" custom:meta="keep-sheetData">`+
+    `<row r="1" custom:note="keep-header">${stringCell('A1','VERSION')}${stringCell('B1','15.0')}</row>`+
+    `<row r="4">${stringCell('A4','TIMESTAMP')}${stringCell('B4','OLD STAMP')}</row>`+
+    `<row r="5">${stringCell('A5','COL')}${stringCell('B5','Name')}${stringCell('C5','Property_ExternalID')}${stringCell('D5','Amount')}</row>`+
+    `<row r="6">${stringCell('B6','OLD DATA')}${stringCell('C6','asset')}<c r="D6" s="1"><v>10</v></c></row></sheetData>`+
+    `<dataValidations count="1"><dataValidation type="list" sqref="B6:B9"><formula1>Values!$A$1:$A$2</formula1></dataValidation></dataValidations>`+
+    `<extLst><ext uri="urn:fixture"><f:marker xmlns:f="urn:metadata" f:value="keep">Unchanged</f:marker></ext></extLst></worksheet>`;
+  const baseline={
+    '[Content_Types].xml':'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/calcChain.xml" ContentType="application/test-chain"/><Override PartName="/xl/styles.xml" ContentType="application/test-styles"/></Types>',
+    'xl/workbook.xml':`<workbook xmlns="${ns}" xmlns:r="${rel}"><sheets><sheet name="PropertyAssets" sheetId="1" r:id="property"/><sheet name="Leases" sheetId="2" r:id="leases"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels':`<Relationships xmlns="${pkg}"><Relationship Id="property" Type="${rel}/worksheet" Target="worksheets/property.xml"/><Relationship Id="leases" Type="${rel}/worksheet" Target="worksheets/leases.xml"/><Relationship Id="style" Type="${rel}/styles" Target="styles.xml"/><Relationship Id="chain" Type="${rel}/calcChain" Target="calcChain.xml"/></Relationships>`,
+    'xl/worksheets/property.xml':sheet,'xl/worksheets/leases.xml':sheet,
+    'xl/styles.xml':`<styleSheet xmlns="${ns}"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="0"/></cellXfs></styleSheet>`,
+    'xl/calcChain.xml':`<calcChain xmlns="${ns}"/>`
+  };
+  const prefix=(xml,tag)=>xml.replace('xmlns=','xmlns:'+tag+'=').replace(/<(\/?)([A-Za-z_][\w.-]*)(?=[\s/>])/g,'<$1'+tag+':$2');
+  const variants=[baseline,
+    Object.fromEntries(Object.entries(baseline).map(([name,xml])=>[name,xml.replace(/"/g,"'")])),
+    {...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace(/<sheet\b([^>]*?)\/>/g,'<sheet$1></sheet>'),'xl/_rels/workbook.xml.rels':baseline['xl/_rels/workbook.xml.rels'].replace(/<Relationship\b([^>]*?)\/>/g,'<Relationship$1></Relationship>')},
+    Object.fromEntries(Object.entries(baseline).map(([name,xml])=>[name,prefix(xml,'s')])),
+    {...baseline,'xl/worksheets/property.xml':sheet.replace('<row r="1"','<row'),'xl/worksheets/leases.xml':sheet.replace('<row r="1"','<row')},
+    {...baseline,'xl/_rels/workbook.xml.rels':baseline['xl/_rels/workbook.xml.rels'].replace(/Target="worksheets\//g,'Target="./worksheets/')}
+  ];
+  for(const parts of variants){
+    const {context,run}=setup();context.input=zip(Object.entries(parts).map(([name,data])=>({name,data})));
+    context.T=await run('x4ReadTemplate(input)');context.A={sheets:{PropertyAssets:[[null,'New & <Name>','new-asset',1250.75]],Leases:[[null,'New Tenant','new-asset',12.75]]}};
+    context.output=await run('x4WriteWorkbook(T,A,null,"NEW & <STAMP>")');
+    const result=await run('x4ReadTemplate(output)');
+    assert.equal(result.sheets.PropertyAssets.rows.length,1);assert.equal(result.sheets.Leases.rows.length,1);
+    assert.equal(result.sheets.PropertyAssets.rows[0][1],'New & <Name>');assert.equal(result.sheets.PropertyAssets.rows[0][3],1250.75);
+    assert.equal(result.sheets.Leases.rows[0][1],'New Tenant');assert.equal(result.sheets.Leases.rows[0][3],12.75);
+    assert.equal(result.sheets.PropertyAssets.head.VERSION,'15.0');assert.equal(result.sheets.PropertyAssets.head.TIMESTAMP,'NEW & <STAMP>');
+    assert.equal(result.sheets.PropertyAssets.style[3],1);
+    const archive=run('officeZipOpen(output)'),read=async name=>Buffer.from(await archive.read(name)).toString();
+    const xml=await read('xl/worksheets/property.xml');assert.ok(!xml.includes('OLD DATA'));
+    const doc=new DOMParser().parseFromString(xml),tags=name=>doc.getElementsByTagNameNS('*',name);
+    assert.equal(tags('sheetData')[0].getAttribute('xmlns:mc'),mc);assert.equal(tags('sheetData')[0].getAttribute('xmlns:custom'),'urn:producer');
+    assert.equal(tags('sheetData')[0].getAttributeNS(mc,'Ignorable'),'custom');assert.equal(tags('sheetData')[0].getAttributeNS('urn:producer','meta'),'keep-sheetData');
+    assert.equal(tags('row')[0].getAttributeNS('urn:producer','note'),'keep-header');
+    assert.equal(tags('row').filter(row=>row.getAttribute('r')==='6').length,1);
+    assert.equal(tags('dimension')[0].getAttribute('ref'),'A1:D6');assert.equal(tags('sheetPr')[0].getAttribute('codeName'),'KeepThis');
+    assert.equal(tags('col')[0].getAttribute('width'),'25');assert.equal(tags('dataValidation')[0].getAttribute('sqref'),'B6:B9');assert.equal(tags('formula1')[0].textContent,'Values!$A$1:$A$2');
+    assert.equal(tags('marker')[0].getAttributeNS('urn:metadata','value'),'keep');assert.equal(tags('marker')[0].textContent,'Unchanged');
+    assert.equal(await read('xl/styles.xml'),parts['xl/styles.xml']);assert.ok(!archive.names.includes('xl/calcChain.xml'));
+    const types=new DOMParser().parseFromString(await read('[Content_Types].xml')).getElementsByTagNameNS('*','Override');assert.equal(types.length,1);assert.equal(types[0].getAttribute('PartName'),'/xl/styles.xml');
+    const rels=new DOMParser().parseFromString(await read('xl/_rels/workbook.xml.rels')).getElementsByTagNameNS('*','Relationship');assert.equal(rels.length,3);assert.ok(rels.some(r=>r.getAttribute('Id')==='style'));
   }
 });

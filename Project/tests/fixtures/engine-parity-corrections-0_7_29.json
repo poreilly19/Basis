@@ -1,0 +1,28 @@
+{
+  "reviewedAgainstCommit": "f9eae35f35869f31e488004e6247df209620d1cc",
+  "baselineFixtureSha256": "1c08edfb3676a13e3562007773a0fa296015c0ae566f80405c2654b5c8321675",
+  "reason": "The position fee-simple calculation deducted capital twice because annual leasing already includes capital. Only the position fee-simple value and its derived A+B gap change in these existing parity cases. All other output fields must retain their original exact graph fingerprint.",
+  "independentFormula": "Restored value equals the present value of the duplicate capital deduction: sum annualAmount * (1 + annualGrowth)^year / (1 + discountRate)^(year + 1).",
+  "cases": {
+    "sample-nominal": {
+      "originalOutputSha256": "ef807b79ef4e791a9425adae8101b7e4df09ba161fa72ccfed7aa31270f9030e",
+      "originalPositions": {"feeSimple": 23803220.860398486, "gap": 176753.48575944826},
+      "capital": {"annualAmount": 22860, "annualGrowth": 0.03, "discountRate": 0.075, "payments": 10}
+    },
+    "sample-effective": {
+      "originalOutputSha256": "357134efbeb69baa7be50c38f7a0f16e6abe88773e4459d1a08fc9f3d3607dce",
+      "originalPositions": {"feeSimple": 23803220.860398486, "gap": 176753.48575944826},
+      "capital": {"annualAmount": 22860, "annualGrowth": 0.03, "discountRate": 0.075, "payments": 10}
+    },
+    "sample-annual": {
+      "originalOutputSha256": "86b76a33b9b0887f42eaa4988a1069e182c4e3d0792f04b2e909fcc01d5f400b",
+      "originalPositions": {"feeSimple": 23803220.860398486, "gap": 176753.48575944826},
+      "capital": {"annualAmount": 22860, "annualGrowth": 0.03, "discountRate": 0.075, "payments": 10}
+    },
+    "future-floating-maturing-debt": {
+      "originalOutputSha256": "ebdbd6ff21310e73dbde6c838f4429c13526f1c07e15a541236c31cabefeb619",
+      "originalPositions": {"feeSimple": 113454.54545454543, "gap": 2181.818181818191},
+      "capital": {"annualAmount": 2400, "annualGrowth": 0, "discountRate": 0.1, "payments": 1}
+    }
+  }
+}

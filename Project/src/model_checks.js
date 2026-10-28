@@ -5,7 +5,7 @@ function basisModelIssues(model=S,result=R){
   return issues;
 }
 function basisCheckDestination(issue){
-  const target=issue.target||{},routes={tenants:['tenants','rr'],areas:['property','desc'],infl:['market','infl'],ops:['expenses','op'],mlas:['market','ml'],position:['valuation','pos']};
+  const target=issue.target||{},routes={tenants:['tenants','rr'],areas:['property','desc'],infl:['market','infl'],ops:['expenses','op'],mlas:['market','ml'],loans:['investment','debt'],position:['valuation','pos']};
   const categories={'Analysis':['property','desc'],'Engine':['property','desc'],'Area':['property','desc'],'Inflation':['market','infl'],'Expenses':['expenses','op'],
     'Market leasing':['market','ml'],'Rent roll':['tenants','rr'],'Recoveries':['tenants','recov'],'Occupancy':['tenants','rr'],
     'Ground lease':['valuation','pos'],'Cash flow':['tenants','rr'],'Valuation':['valuation','pvset']};

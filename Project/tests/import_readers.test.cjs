@@ -34,6 +34,13 @@ function setup(){
   const run=code=>vm.runInContext(code,context);
   return {context,run,counters,pdf,file(name,size=1,text='Body'){return {name,size,text:async()=>{counters.read++;return text;},arrayBuffer:async()=>{counters.read++;return {name,byteLength:1};}};}};
 }
+async function until(predicate){for(let i=0;i<100&&!predicate();i++)await Promise.resolve();assert.ok(predicate(),'Expected document-reading boundary was reached');}
+function readingTimers(context){
+  const timers=new Map();let id=0;
+  context.setTimeout=(callback,delay)=>{const key=++id;timers.set(key,{callback,delay});return key;};
+  context.clearTimeout=key=>timers.delete(key);
+  return {timers,expireDocument(){const entry=[...timers].find(([,timer])=>timer.delay===120000);assert.ok(entry,'Document deadline must be active');timers.delete(entry[0]);entry[1].callback();}};
+}
 
 test('non-Office oversized documents are rejected before text, image or PDF reads',async()=>{
   for(const ext of ['txt','csv','json','pdf','png']){
@@ -67,6 +74,62 @@ test('concurrent intake batches share reserved bytes and clearing stops late rea
   const pending=deferred();context.files=[{name:'pending.txt',size:1,text:()=>pending.promise},file('queued.txt')];
   const batch=run('intAdd(files)');run('iReadClearDocuments()');pending.resolve('late text');await batch;
   assert.equal(context.INT.docs.length,0);assert.equal(counters.read,0);
+});
+
+test('a stalled text read reaches its deadline and later files in the batch still load',async()=>{
+  const {context,run,file}=setup(),clock=readingTimers(context),blocked=deferred();let reads=0;
+  context.files=[{name:'stalled.txt',size:1,text:()=>{reads++;return blocked.promise;}},file('next.txt',1,'Next file')];
+  const pending=run('intAdd(files)');await until(()=>reads===1);clock.expireDocument();
+  await until(()=>context.INT.docs[1]?.status==='ready');await pending;
+  const failed=context.INT.docs[0];assert.equal(failed.status,'error');assert.match(failed.err,/Document reading.*time limit/);
+  assert.equal(failed.pages.length,0);assert.equal(failed.readController,undefined);
+  assert.equal(context.INT.docs[1].pages[0].text,'Next file');assert.equal(clock.timers.size,0);
+  blocked.reject(Error('late browser read failure'));await Promise.resolve();
+});
+
+test('late non-cancellable reader writes cannot replace a timed-out document or its progress',async()=>{
+  const {context,run,counters,file}=setup(),clock=readingTimers(context),blocked=deferred();let staged;
+  const read=context.intRead;context.intRead=(doc,input,scope)=>input.name==='late.txt'?(staged=doc,blocked.promise.then(()=>{
+    doc.pages.push({n:1,text:'Late content'});doc.images.push({n:1,blob:'Late image'});doc.scans=1;doc.warn='Late warning';doc.status='ready';
+  })):read(doc,input,scope);
+  context.files=[file('late.txt'),file('current.txt')];const pending=run('intAdd(files)');await until(()=>staged);clock.expireDocument();
+  await until(()=>context.INT.docs[1]?.status==='ready');await pending;
+  const failed=context.INT.docs[0],error=failed.err,renders=counters.draw;assert.notEqual(staged,failed);
+  blocked.resolve();for(let i=0;i<20;i++)await Promise.resolve();
+  assert.equal(failed.status,'error');assert.equal(failed.err,error);assert.equal(failed.pages.length,0);assert.equal(failed.images.length,0);assert.equal(failed.scans,0);assert.equal(failed.warn,'');
+  assert.equal(counters.draw,renders);assert.equal(context.INT.docs[1].status,'ready');assert.equal(clock.timers.size,0);
+});
+
+test('removing a stalled document settles immediately and allows the remaining batch to proceed',async()=>{
+  const {context,run,counters,file}=setup(),clock=readingTimers(context),blocked=deferred();let reads=0;
+  context.files=[{name:'removed.txt',size:1,text:()=>{reads++;return blocked.promise;}},file('remaining.txt')];
+  const pending=run('intAdd(files)');await until(()=>reads===1);const removed=context.INT.docs[0];context.removed=removed;
+  run('iReadCancelDocument(removed)');await until(()=>context.INT.docs[0]?.status==='ready');await pending;
+  assert.equal(context.INT.docs.length,1);assert.equal(context.INT.docs[0].name,'remaining.txt');assert.equal(removed.readController,undefined);
+  const renders=counters.draw;blocked.resolve('Late removed content');for(let i=0;i<20;i++)await Promise.resolve();
+  assert.equal(removed.pages.length,0);assert.equal(counters.draw,renders);assert.equal(clock.timers.size,0);
+});
+
+test('a whole-document deadline still destroys an in-flight PDF and permits the next file',async()=>{
+  const {context,run,counters,pdf,file}=setup(),clock=readingTimers(context),blocked=deferred();let textReads=0,cleanups=0;
+  pdf.getPage=async()=>({getTextContent(){textReads++;return blocked.promise;},cleanup(){cleanups++;}});
+  context.files=[{name:'stalled.pdf',size:1,arrayBuffer:async()=>new ArrayBuffer(1)},file('after-pdf.txt')];
+  const pending=run('intAdd(files)');await until(()=>textReads===1);clock.expireDocument();
+  await until(()=>context.INT.docs[1]?.status==='ready');await pending;await until(()=>counters.pdfDestroy===1);
+  assert.equal(context.INT.docs[0].status,'error');assert.equal(context.INT.docs[0].pages.length,0);assert.equal(cleanups,1);
+  blocked.resolve({items:[]});for(let i=0;i<20;i++)await Promise.resolve();assert.equal(counters.pdfDestroy,1);assert.equal(clock.timers.size,0);
+});
+
+test('a scanned PDF waiting on provider limits is destroyed at the document deadline',async()=>{
+  const {context,run,counters,pdf,file}=setup(),clock=readingTimers(context),blocked=deferred();let preparing=0,renders=0;
+  pdf.getPage=async()=>({getTextContent:async()=>({items:[]}),cleanup(){}});
+  context.intLimits=()=>{preparing++;return blocked.promise;};context.intRenderPage=async()=>{renders++;return 'Late scan';};
+  context.files=[{name:'scan.pdf',size:1,arrayBuffer:async()=>new ArrayBuffer(1)},file('after-scan.txt')];
+  const pending=run('intAdd(files)');await until(()=>preparing===1);clock.expireDocument();
+  await until(()=>context.INT.docs[1]?.status==='ready');await pending;await until(()=>counters.pdfDestroy===1);
+  assert.equal(context.INT.docs[0].status,'error');assert.equal(context.INT.docs[0].images.length,0);assert.equal(renders,0);
+  blocked.resolve({images:{maxInputBytes:4000000}});for(let i=0;i<30;i++)await Promise.resolve();
+  assert.equal(counters.pdfDestroy,1);assert.equal(renders,0);assert.equal(context.INT.docs[0].images.length,0);assert.equal(clock.timers.size,0);
 });
 
 test('PDF page limits reject oversized or malformed documents before extracting a page and clean resources',async()=>{

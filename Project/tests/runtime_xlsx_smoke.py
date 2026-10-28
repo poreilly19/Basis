@@ -98,6 +98,23 @@ class RuntimeXlsxSmokeTests(unittest.TestCase):
         self.assertEqual(result['check'], 'edited')
         self.assertEqual(self.blocked, [])
 
+    def test_actual_report_cells_keep_precision_before_structured_import(self):
+        result = self.page.evaluate('''async () => {
+          const lib=await pfXlsxLib(),wb=lib.utils.book_new(),values=[1234567890.12345,123456789012.34,0.000000123456789012345,1.23456789012345e9,0,12.125];
+          lib.utils.book_append_sheet(wb,lib.utils.aoa_to_sheet([
+            ['Expenses - Operating Expenses'],['Name','How Input','Amount1'],['Operating','Amount',0],
+            ['Investment - Property Purchase'],['Purchase Date','Purchase Price'],['1/1/2026',1234567890.12345]
+          ]),'Input Assumptions Report');
+          lib.utils.book_append_sheet(wb,lib.utils.aoa_to_sheet([['Value'],...values.map(value=>[value])]),'Precision probes');
+          const bytes=new Uint8Array(lib.write(wb,{type:'array',bookType:'xlsx',compression:true}));
+          const sheets=await intXlsx(await intUnzip(bytes),{keepRows:true});
+          const report=sheets.find(sheet=>sheet.name==='Input Assumptions Report'),probes=sheets.find(sheet=>sheet.name==='Precision probes');
+          return {price:axImport(report.rows).S.price,numbers:probes.rows.slice(1).map(row=>Number(row[0]))};
+        }''')
+        self.assertEqual(result['price'], 1234567890.12345)
+        self.assertEqual(result['numbers'], [1234567890.12345, 123456789012.34, 0.000000123456789012345, 1.23456789012345e9, 0, 12.125])
+        self.assertEqual(self.blocked, [])
+
     def test_export_keeps_original_inputs_filename_and_library_across_wait(self):
         result = self.page.evaluate('''async () => {
           const lib=await pfXlsxLib(),originalLoad=pfXlsxLib,originalOffer=offerFile,originalGlobal=globalThis.XLSX;

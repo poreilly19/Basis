@@ -46,7 +46,9 @@ function basisMapReviewedTenant(tenant,record,key,review,log,notes){
   }
   const inputs={rec:'rec',deposit:'sd',improvements:'ti',commissions:'lc',option:'opts',termination:'term',percentage:'pr',abatement:'free',free:'free',note:'other'};
   for(const [group,source] of Object.entries(inputs))if(decisions[group]?.mode==='keep')input[source]=source==='opts'?[]:null;
+  if(decisions.rec?.mode==='edit'&&typeof decisions.rec.values?.rec==='string'&&recs.has(decisions.rec.values.rec))input.rec=null;
   const generated=[],mapped=intMapTenant(tenant,input,(...args)=>generated.push(args),notes),blocked=[];
+  if(mapped.recoveryBlocked)blocked.push(mapped.recoveryBlocked);
   for(const [group,message]of Object.entries(mapped.amendmentBlocked||{})){const d=decisions[group];if(d?.mode==='keep'||d?.mode==='edit'&&(group==='rent'?Object.hasOwn(d.values||{},'sched'):typeof d.values?.rec==='string'&&recs.has(d.values.rec)))continue;blocked.push(message+' Choose Keep Current Value or enter a complete correction for '+(group==='rent'?'Rent Terms':'Recoveries')+'.');}
   const proposed=basisReviewClone(tenant);if(record.sf>0)proposed.sf=record.sf;
   for(const [group,decision] of Object.entries(decisions)){
@@ -70,7 +72,7 @@ function basisMapReviewedTenant(tenant,record,key,review,log,notes){
     const group=Object.keys(BASIS_REVIEW_GROUPS).find(g=>BASIS_REVIEW_GROUPS[g].includes(field))||field,edited=decisions[group]?.mode==='edit';
     log(tenant.name+' · '+field,(edited?'Manual correction: ':'')+basisReviewDisplay(tenant[field],field,tenant,S),basisIntakeFieldSources(mapped,field));
   }
-  return {key,before,proposed,blocked,amendmentNotes:mapped.amendmentNotes||[],amendedGroups:[...(record.rentChanges?.length?['rent']:[]),...(record.recoveryChanges?.length?['rec']:[])],after:basisReviewClone(tenant),source:record.src,sources:record.srcs||[],fieldSources:mapped.fieldSources||{},annual:(()=>{const step=mapped.steps?.[0];return Number.isFinite(step?.psf)&&tenant.sf>0?step.psf*tenant.sf:step?.annual;})()};
+  return {key,before,proposed,blocked,amendmentNotes:[...(mapped.amendmentNotes||[]),...(mapped.recoveryBlocked?[mapped.recoveryBlocked]:[])],amendedGroups:[...(record.rentChanges?.length?['rent']:[]),...(record.recoveryChanges?.length||mapped.recoveryBlocked?['rec']:[])],after:basisReviewClone(tenant),source:record.src,sources:record.srcs||[],fieldSources:mapped.fieldSources||{},annual:(()=>{const step=mapped.steps?.[0];return Number.isFinite(step?.psf)&&tenant.sf>0?step.psf*tenant.sf:step?.annual;})()};
 }
 function basisReviewDisplay(value,field,tenant,model){
   if(field==='rentBasis')return ({psfyr:'$/SF/Year',psfmo:'$/SF/Month',yramt:'$/Year',moamt:'$/Month'}[value]||(!value?'Default: $/SF/Year':String(value)));
@@ -112,7 +114,7 @@ function basisTenantFieldReview(){
       const display=basisReviewClone(INT.review||{});for(const groups of Object.values(display))for(const [key,decision] of Object.entries(groups)){if(key==='$target')continue;delete decision.invalid;if(decision.mode==='edit'&&key!=='sf')decision.values={};}
       prepared=intPrepareApply(JSON.parse(INT.target.json),INT.x,INT.pick,INT.mode,display);
     }
-    const checks=intChecks(INT.x,INT.docs),priority=key=>checks.some(c=>c.key==='t:'+key&&c.sev==='error')?0:checks.some(c=>c.key==='t:'+key&&c.sev==='warn')?1:2;
+    const checks=intChecks(INT.x,INT.docs,INT.review||{}),priority=key=>checks.some(c=>c.key==='t:'+key&&c.sev==='error')?0:checks.some(c=>c.key==='t:'+key&&c.sev==='warn')?1:2;
     const reviews=prepared.tenantReviews.sort((a,b)=>priority(a.key)-priority(b.key));
     for(const review of reviews){
       const {$target,...decisions}=INT.review?.[review.key]||{},groups=[...new Set([...basisReviewGroups(review.before,review.proposed),...(review.amendedGroups||[]),...Object.keys(decisions)])];

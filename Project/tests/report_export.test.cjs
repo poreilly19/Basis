@@ -109,6 +109,17 @@ test('all group memberships, detailed terms, zeros and false values survive expo
 test('unavailable IRRs remain blank and core nonfinite values reject',()=>{
  const s=model(),r=api.calc(s);r.irrU=NaN;r.irrL=null;let p=api.basisBuildReportPackage(s,r);assert.equal(row(p,'Property Summary','Unlevered IRR')[1],null);r.pv=Infinity;assert.throws(()=>api.basisBuildReportPackage(s,r),/not finite/);
 });
+test('supported formatted numeric text exports as numeric cells without changing model inputs',()=>{
+ const s=model();s.areas[0].sf='1,000';s.tenants[0].sf='1,000';s.tenants[0].rent='$12.75';s.ops[0].amt='$2,400';
+ const before=JSON.stringify(s),p=report(s),tenant=rows(p,'Tenant Rent Roll')[1];
+ assert.equal(tenant[2],1000);assert.equal(tenant[5],12.75);
+ row(p,'Cash Flow','Base Rental Revenue').slice(1).forEach(v=>close(v,12750));
+ row(p,'Cash Flow','Net Operating Income').slice(1).forEach(v=>close(v,10350));
+ assert.equal(JSON.stringify(s),before);
+});
+test('formatted-input support does not conceal malformed or nonfinite report assumptions',()=>{
+ for(const invalid of ['12 dollars',Infinity,'Infinity']){const s=model();s.tenants[0].rent=invalid;assert.throws(()=>report(s),/not finite/);}
+});
 test('building reports never mutates model data or exposes source logs',()=>{
  const s=model();s.srcLog=[{quote:'PRIVATE SOURCE QUOTE'}];const before=JSON.stringify(s);const p=report(s);assert.equal(JSON.stringify(s),before);assert.ok(!JSON.stringify(p).includes('PRIVATE SOURCE QUOTE'));
 });

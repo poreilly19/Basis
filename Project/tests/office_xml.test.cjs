@@ -108,3 +108,68 @@ test('XL4ADW preflight rejects missing and malformed required XML before regex e
   const truncated={...baseline,'xl/worksheets/a.xml':baseline['xl/worksheets/a.xml'].replace('</worksheet>','')};
   await assert.rejects(setup(truncated).run('x4ReadTemplate(null)'),/malformed XML/);
 });
+
+test('template workbook metadata accepts equivalent XML quotes, tag forms, namespaces and relative targets',async()=>{
+  const baseline=workbookParts();
+  const variants=[
+    {...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace(/"/g,"'"),'xl/_rels/workbook.xml.rels':baseline['xl/_rels/workbook.xml.rels'].replace(/"/g,"'")},
+    {...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace(/\/>/g,'></sheet>')},
+    {...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace('xmlns:r=', 'xmlns:rel=').replace(/r:id/g,'rel:id')},
+    {...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace('<workbook ', '<s:workbook xmlns:s="urn:workbook-fixture" ').replace('</workbook>','</s:workbook>').replace(/<(\/?)(sheets|sheet)(?=[\s>])/g,'<$1s:$2')},
+    {...baseline,'xl/_rels/workbook.xml.rels':relations(relation('a','./worksheets/a.xml')+relation('b','../xl/worksheets/b.xml'))},
+    {...baseline,'xl/_rels/workbook.xml.rels':relations(relation('a','/xl/worksheets/a.xml')+relation('b','/xl/worksheets/b.xml'))}
+  ];
+  for(const parts of variants){
+    const result=await setup(parts).run('x4ReadTemplate(null)');
+    assert.deepEqual(Array.from(result.order),['PropertyAssets','Leases']);
+    assert.equal(result.sheets.PropertyAssets.path,'xl/worksheets/a.xml');
+    assert.equal(result.sheets.Leases.path,'xl/worksheets/b.xml');
+    assert.equal(result.sheets.PropertyAssets.rows[0][1],'Property');
+    assert.equal(result.sheets.Leases.rows[0][1],'Tenant');
+  }
+});
+
+test('template workbook names use XML-decoded attributes and external or missing relationships still reject',async()=>{
+  const baseline=workbookParts(),unicode={...baseline,
+    'xl/workbook.xml':baseline['xl/workbook.xml'].replace('</sheets>','<sheet name="Reference &#x1F3E2; &amp; Notes" r:id="reference"/></sheets>'),
+    'xl/_rels/workbook.xml.rels':relations(relation('a','worksheets/a.xml')+relation('b','worksheets/b.xml')+relation('reference','worksheets/reference.xml')),
+    'xl/worksheets/reference.xml':'<worksheet><sheetData/></worksheet>'};
+  const result=await setup(unicode).run('x4ReadTemplate(null)');
+  assert.equal(result.order[2],'Reference 🏢 & Notes');
+  for(const rels of [relations(relation('b','worksheets/b.xml')),relations(relation('a','https://example.invalid/a.xml','TargetMode="External"')+relation('b','worksheets/b.xml'))]){
+    await assert.rejects(setup({...baseline,'xl/_rels/workbook.xml.rels':rels}).run('x4ReadTemplate(null)'),/missing or external/);
+  }
+  await assert.rejects(setup({...baseline,'xl/workbook.xml':baseline['xl/workbook.xml'].replace('r:id="a"','r:id="unknown"')}).run('x4ReadTemplate(null)'),/missing or external/);
+});
+
+test('numeric worksheet text keeps representable precision through structured report import',async()=>{
+  const samples=[['1234567890.12345',1234567890.12345],['123456789012.34',123456789012.34],
+    ['0.000000123456789012345',0.000000123456789012345],['1.23456789012345e9',1234567890.12345],['0',0],['12.125',12.125]];
+  for(const [serial,expected] of samples){
+    const xml='<worksheet><sheetData><row r="1">'+cell('A1','Expenses - Operating Expenses')+'</row>'+
+      '<row r="2">'+cell('A2','Name')+cell('B2','How Input')+cell('C2','Amount1')+'</row>'+
+      '<row r="3">'+cell('A3','Operating')+cell('B3','Amount')+'<c r="C3"><v>0</v></c></row>'+
+      '<row r="4">'+cell('A4','Investment - Property Purchase')+'</row>'+
+      '<row r="5">'+cell('A5','Purchase Date')+cell('B5','Purchase Price')+'</row>'+
+      '<row r="6">'+cell('A6','1/1/2026')+'<c r="B6"><v>'+serial+'</v></c></row></sheetData></worksheet>';
+    const parts={'xl/workbook.xml':'<workbook xmlns:r="'+REL+'"><sheets><sheet name="Input Assumptions Report" r:id="a"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels':relations(relation('a','worksheets/a.xml')),'xl/worksheets/a.xml':xml};
+    const {context,run}=setup(parts);
+    vm.runInContext(fs.readFileSync(path.join(root,'src/financial_engine.js'),'utf8')+'\n'+part('const AX_SEC=','/* =========================== DOCUMENT INTAKE'),context);
+    const sheets=await run('intXlsx(z,{keepRows:true})');context.importRows=sheets[0].rows;
+    assert.equal(Number(sheets[0].rows[5][1]),expected,'worksheet numeric text must not lose decimal precision');
+    assert.equal(run('axImport(importRows).S.price'),expected,'structured import must retain the representable value');
+  }
+});
+
+test('report numeric parsing preserves exponent signs and supported accounting, currency and percent conventions',()=>{
+  const {context,run}=setup();vm.runInContext(part('const AX_SEC=','/* =========================== DOCUMENT INTAKE'),context);
+  for(const [text,expected] of [['1e-3',0.001],['1e+3',1000],['-1.25e-3',-0.00125],['+1.25E+3',1250],
+    ['$1,234.56',1234.56],['-$1,234.56',-1234.56],['$-1,234.56',-1234.56],['(1,234.56)',-1234.56],['($1,234.56)',-1234.56],['$ (1,234.56)',-1234.56],
+    ['3.5%',0.035],['-3.5%',-0.035],['(3.5%)',-0.035],['(3.5)%',-0.035],['1e-3%',0.00001],['0',0],['- 12.125',-12.125]]){
+    context.numericText=text;assert.equal(run('axN(numericText)'),expected,text);
+  }
+  for(const text of ['',null,undefined,'None','N/A','Varies','1e','1e--3','1,2','1,000oops','12 dollars','--12','12-3','NaN','Infinity','3%%','($$3)']){
+    context.numericText=text;assert.equal(run('axN(numericText)'),null,String(text));
+  }
+});
