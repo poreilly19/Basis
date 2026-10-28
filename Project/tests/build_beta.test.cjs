@@ -15,6 +15,7 @@ test('a changed script changes its CSP hash',()=>{
 test('minimal beta build is reproducible and includes only declared deployable files',()=>{
  const out=buildBeta(),first=fs.readFileSync(path.join(out.directory,'release.json'));assert.equal(out.release.appSha256,digest(html));
  assert.equal(fs.readFileSync(path.join(out.directory,'index.html'),'utf8'),html);
+ assert.deepEqual(fs.readFileSync(path.join(out.directory,'LICENSE.txt')),fs.readFileSync(path.join(root,'LICENSE')));
  for(const [name,record]of Object.entries(out.release.files)){const bytes=fs.readFileSync(path.join(out.directory,name));assert.equal(digest(bytes),record.sha256);assert.equal(bytes.length,record.bytes);}
  assert.deepEqual(buildBeta().release,out.release);assert.deepEqual(fs.readFileSync(path.join(out.directory,'release.json')),first);
  assert.ok(!Object.keys(out.release.files).some(name=>name.startsWith('tests/')||name.startsWith('samples/')||name.endsWith('.env')));
@@ -23,7 +24,7 @@ test('minimal beta build is reproducible and includes only declared deployable f
 test('beta builder refuses to remove a directory it does not own',()=>{
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'basis-beta-build-'));
  try{
-  for(const name of ['app','docs','tests/fixtures'])fs.cpSync(path.join(root,name),path.join(temp,name),{recursive:true});fs.copyFileSync(path.join(root,'package.json'),path.join(temp,'package.json'));
+  for(const name of ['app','docs','tests/fixtures'])fs.cpSync(path.join(root,name),path.join(temp,name),{recursive:true});for(const name of ['package.json','LICENSE'])fs.copyFileSync(path.join(root,name),path.join(temp,name));
   const out=path.join(temp,'dist/basis-beta');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'keep.txt'),'user file');
   assert.throws(()=>buildBeta(temp),/not generated/);assert.equal(fs.readFileSync(path.join(out,'keep.txt'),'utf8'),'user file');
  }finally{fs.rmSync(temp,{recursive:true,force:true});}
@@ -31,7 +32,7 @@ test('beta builder refuses to remove a directory it does not own',()=>{
 for(const kind of ['extra file','edited file','missing file'])test('beta rebuild preserves a user-modified output: '+kind,()=>{
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'basis-beta-owned-'));
  try{
-  for(const name of ['app','docs','tests/fixtures'])fs.cpSync(path.join(root,name),path.join(temp,name),{recursive:true});fs.copyFileSync(path.join(root,'package.json'),path.join(temp,'package.json'));
+  for(const name of ['app','docs','tests/fixtures'])fs.cpSync(path.join(root,name),path.join(temp,name),{recursive:true});for(const name of ['package.json','LICENSE'])fs.copyFileSync(path.join(root,name),path.join(temp,name));
   const out=buildBeta(temp).directory,release=fs.readFileSync(path.join(out,'release.json'));
   if(kind==='extra file')fs.writeFileSync(path.join(out,'keep.txt'),'user data');
   if(kind==='edited file')fs.writeFileSync(path.join(out,'index.html'),'user edit');

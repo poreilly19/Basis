@@ -44,7 +44,7 @@ Version 7.9 bounds inflation expansion, preserves unsaved edits during library
 reload and improves workbook date styles. Earlier work [upgrades SheetJS](docs/SPREADSHEET_UPGRADE.md)
 and adds [portable runners and CI](docs/CI.md). The original upload is unchanged.
 
-This is the latest working Basis Studio HTML application from the October 2026 iterative development, packaged as an ordinary development project for **OpenAI Codex**. The code is **not cleared for public release**. Do not publish it or add a license declaration without completing the IP and dependency review.
+This is the latest working Basis Studio HTML application from the October 2026 iterative development, packaged as an ordinary development project for **OpenAI Codex**. Basis Studio's original code is licensed under the **[MIT License](LICENSE)**. Third-party components retain their separate licenses; see [the notices](docs/THIRD_PARTY_NOTICES.md). The documented provenance, dependency and release reviews remain separate work and are not marked complete by this license choice.
 
 Version 7.25 restores the reference’s **Portfolio / Inputs / Reports** modes,
 **File / Home / View / Reports** ribbon and left portfolio/building Navigator.

@@ -5,7 +5,8 @@ Earlier assessment: [public-alpha readiness and original-interface restoration](
 Current test evidence: [0.7.27 validation](VALIDATION_0_7_27.md).
 The supplied interface's ribbon and left Navigator have been [restored on the corrected app](RIBBON_0_7_25.md). Broad unchecked
 items below include remaining scope even where later targeted cases pass.
-Choosing a public license and completing provenance review are still open.
+The owner selected the [MIT License](../LICENSE) on October 28, 2026.
+Provenance review remains open and is separate from this license choice.
 The recommendations here do not mean legal counsel is a statutory requirement
 for every open-source release.
 
@@ -48,7 +49,7 @@ for every open-source release.
 - [x] Production PDF reader/worker exact-size and SHA-256 verification before Blob execution
 - [ ] Completed transitive license, vulnerability and provenance audit
 - [ ] Security/privacy review for optional AI/document extraction features
-- [ ] Choose public license only after owner approval and legal review
+- [x] Owner selected MIT; project license files and separate third-party notices included
 - [ ] Intellectual-property counsel review before public distribution
 
 ## Delivery and usability

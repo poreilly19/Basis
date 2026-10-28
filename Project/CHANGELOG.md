@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-28 — MIT license
+
+- Add the owner-selected MIT license for the original Basis code, include it in source and deployment packages, and update current license documentation. Keep third-party Apache 2.0 notices and the separate provenance and release reviews. Application calculations and model format are unchanged.
+
 ## 0.7.28 — 2026-10-27 neutral workbook terminology
 
 - Replace product-specific workbook labels, internal navigation identifiers and documentation with neutral terminology while retaining input-template import/export and report-workbook features. Financial calculation behavior is unchanged; historical feature-inventory text is explicitly marked as edited for distribution.

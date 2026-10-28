@@ -71,10 +71,10 @@ See [v0.7.28 validation](Project/docs/VALIDATION_0_7_28.md), the
 [release checklist](Project/docs/RELEASE_CHECKLIST.md) for tested behavior and
 remaining live-host, AI-provider, Windows and analyst acceptance work.
 
-**An open-source license has not been selected.** Public source availability alone
-does not grant an open-source license. Third-party components retain their own
-licenses; see [the notices](Project/docs/THIRD_PARTY_NOTICES.md).
-Provenance and release reviews remain documented in the project.
+Basis Studio's original code is licensed under the **[MIT License](LICENSE)**.
+Third-party components retain their own licenses; see
+[the notices](Project/docs/THIRD_PARTY_NOTICES.md). Provenance and release reviews
+remain documented in the project; choosing MIT does not mark those reviews complete.
 
 For application details, see [Project/README.md](Project/README.md) and the
 [changelog](Project/CHANGELOG.md).

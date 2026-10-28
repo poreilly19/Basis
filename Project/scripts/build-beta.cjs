@@ -30,6 +30,7 @@ function buildBeta(root=ROOT){
   const headers=betaHeaders(html),files=new Map([['index.html',Buffer.from(html)]]);
   for(const [source,target]of [
     ['docs/BETA_404.html','404.html'],['docs/BETA_PRIVACY.html','privacy.html'],['docs/BETA_LIMITATIONS.html','limitations.html'],
+    ['LICENSE','LICENSE.txt'],
     ['docs/THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.txt'],
     ['docs/third_party/SHEETJS_LICENSE_0_20_3.txt','third_party/SHEETJS_LICENSE_0_20_3.txt'],
     ['docs/third_party/PDFJS_LICENSE_4_10_38.txt','third_party/PDFJS_LICENSE_4_10_38.txt']

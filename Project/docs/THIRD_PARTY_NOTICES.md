@@ -1,8 +1,10 @@
 # Third-party runtime notices
 
-These notices describe external components used by Basis. They do not assign a
-license to the Basis project. No third-party runtime JavaScript is bundled in
-this handoff; the application requests the listed versions when needed.
+Basis Studio's original code is licensed under the [MIT License](../LICENSE).
+These notices describe external components used by Basis, which retain their
+own licenses. The MIT project license does not replace or relicense those
+components. No third-party runtime JavaScript is bundled in this handoff; the
+application requests the listed versions when needed.
 
 ## SheetJS Community Edition 0.20.3
 

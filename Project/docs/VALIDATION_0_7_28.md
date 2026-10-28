@@ -45,6 +45,22 @@ Application SHA-256:
 Hosted Windows and cross-browser results are recorded separately in GitHub
 Actions for the published commit.
 
+## October 28 MIT license update
+
+The owner selected MIT for the original Basis code. Matching root and portable
+project license files, package metadata, the complete notice embedded in the
+standalone HTML, and deployment `LICENSE.txt` are included. Third-party license
+texts are unchanged. All inline script blocks are byte-identical to the October
+27 application; the new comment changes the file hash without changing runtime
+code. The deployment now contains 12 files.
+
+License-update application SHA-256:
+`dc08cda7db43b5c51baf42311b88ebcdfb6ed0129d44c1035f6460a635605674`.
+
+The full `npm test` suite, build/manifest verification and all six Chromium
+served-release smoke cases passed after this update. The build regression also
+verifies that the shipped MIT text matches the project license exactly.
+
 ## Scope
 
 The cleanup applies to the current source tree and newly generated distribution
@@ -52,6 +68,7 @@ files. Original uploads, historical release archives and existing Git commits
 are retained as historical evidence; no history rewrite is performed. User
 documents, imported templates and saved models are not scrubbed or altered.
 
-This naming cleanup does not establish legal clearance or select an open-source
-license. Owner login, authenticated live-release checks and the remaining
+The naming cleanup did not establish legal clearance. The owner subsequently
+selected the [MIT License](../LICENSE) on October 28, 2026. Owner login,
+authenticated live-release checks and the remaining
 [beta acceptance](BETA_ACCEPTANCE.md) still apply.

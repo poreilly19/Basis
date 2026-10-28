@@ -1,6 +1,7 @@
 {
   "name": "basis-cre-workspace",
   "version": "0.7.28",
+  "license": "MIT",
   "private": true,
   "description": "Basis Studio browser underwriting app and open .basiscre native format (pre-release)",
   "scripts": {
