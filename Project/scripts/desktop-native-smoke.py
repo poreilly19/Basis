@@ -68,7 +68,7 @@ def main():
         result=asynchronous("""
           const model=blankState();model.years=1;model.startYear=2026;model.startMonth=1;
           model.gvRate=0;model.clRate=0;
-          model.ops=[{id:'native-fixed-expense',name:'Fixed operating cost',amt:1200,basis:'amt',inflRef:'none',recov:false}];
+          model.ops=[{id:'native-fixed-expense',name:'Fixed operating cost',amt:1200,basis:'amt',fixedPct:1,infl:0,recov:false}];
           model.nonops=[];model.caps=[];
           model.groundLeases=[];model.tenants=[];
           const before=calc(model),bytes=await basisCreateArchive({kind:'property',model});
