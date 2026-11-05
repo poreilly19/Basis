@@ -12,7 +12,7 @@ async function main(){
   }
   const generated=path.join(root,'desktop/src-tauri/generated');fs.mkdirSync(generated,{recursive:true});
   const metadata=cp.execFileSync('cargo',['metadata','--manifest-path',path.join(root,'desktop/src-tauri/Cargo.toml'),
-    '--locked','--format-version','1','--filter-platform','x86_64-pc-windows-msvc'],
+    '--locked','--format-version','1','--filter-platform','x86_64-pc-windows-msvc',...(offline?['--offline']:[])],
     {cwd:path.join(root,'desktop'),encoding:'utf8',maxBuffer:32*1024*1024,stdio:['ignore','pipe','inherit']});
   const filename=path.join(generated,'cargo-metadata.json');fs.writeFileSync(filename,metadata);
   // Invoke the same audited generator used in CI so packaged notices are current.

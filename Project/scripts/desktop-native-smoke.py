@@ -6,18 +6,28 @@ never invokes a paid AI API or opens a native save dialog.
 """
 import argparse
 import base64
+import csv
+import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import time
-from urllib.request import Request, urlopen
+import zlib
+from urllib.error import HTTPError
+from urllib.request import Request, build_opener, ProxyHandler
 
 
 def request(url, method='GET', data=None):
     payload=None if data is None else json.dumps(data).encode('utf-8')
-    with urlopen(Request(url, data=payload, method=method,
-                         headers={'Content-Type':'application/json'}), timeout=100) as response:
-        value=json.load(response).get('value')
+    try:
+        # This helper only calls its literal loopback driver address.
+        with build_opener(ProxyHandler({})).open(Request(url, data=payload, method=method,
+                             headers={'Content-Type':'application/json'}), timeout=100) as response:
+            value=json.load(response).get('value')
+    except HTTPError as error:
+        body=error.read(8192).decode('utf-8',errors='replace')
+        raise RuntimeError(f'Native WebDriver HTTP {error.code}: {body}') from error
     if isinstance(value, dict) and value.get('error'):
         raise RuntimeError(str(value.get('message', value['error'])))
     return value
@@ -116,7 +126,25 @@ def main():
         """) is True
         assert asynchronous("return await BASIS_DESKTOP.keyStatus('openai');") is False
         print('PASS Windows Credential Manager store/status/delete without API requests',flush=True)
-        print('PASS all seven native desktop smoke checks',flush=True)
+        closing=asynchronous("""
+          S.name='Desktop close-save fixture';DIRTY();
+          return {id:PW.cur,info:await BASIS_DESKTOP.info()};
+        """)
+        run('void BASIS_DESKTOP.close();return true;')
+        deadline=time.monotonic()+30
+        while time.monotonic()<deadline:
+            processes=subprocess.check_output(['tasklist','/FI','IMAGENAME eq basis-desktop.exe','/FO','CSV','/NH'],text=True)
+            if not any(row and row[0].casefold()=='basis-desktop.exe' for row in csv.reader(io.StringIO(processes))):break
+            time.sleep(.2)
+        else:raise RuntimeError('The native close handler did not finish saving and exit')
+        saved=json.loads((Path(closing['info']['dataDirectory'])/'workspace.json').read_text(encoding='utf-8'))
+        entries=saved['entries'];record=next(item for item in entries['pw_index']['props'] if item['id']==closing['id'])
+        header=entries[record.get('storageKey','pwm_'+closing['id'])]
+        text=header['s']+''.join(entries[f"pwm_{closing['id']}_{header['part']}_{part}"]['s'] for part in range(1,header['n']))
+        if header['enc']=='dr64':text=zlib.decompress(base64.b64decode(text),-zlib.MAX_WBITS).decode('utf-8')
+        assert record['name']==json.loads(text)['name']=='Desktop close-save fixture'
+        print('PASS native window close waits for durable model and index save',flush=True)
+        print('PASS all eight installed desktop smoke checks',flush=True)
     finally:
         if session:
             try:request(f'{origin}/session/{session}','DELETE')

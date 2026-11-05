@@ -29,6 +29,7 @@ jobs:
         shell: pwsh
     env:
       CARGO_TERM_COLOR: always
+      RUST_LOG: info
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -85,6 +86,16 @@ jobs:
       - name: Build Windows installer
         working-directory: desktop
         run: npm exec -- tauri build --no-sign -- --locked
+      - name: Install the generated beta in a folder with spaces
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (!$installer) { throw 'Windows installer was not generated' }
+          $destination = Join-Path $env:RUNNER_TEMP 'Basis Desktop Installed'
+          $install = Start-Process $installer.FullName -ArgumentList "/S /D=$destination" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer failed with exit code $($install.ExitCode)" }
+          $application = Join-Path $destination 'basis-desktop.exe'
+          if (!(Test-Path $application)) { throw 'Installed application binary is missing' }
+          "BASIS_DESKTOP_INSTALLED_EXE=$application" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Install the pinned official native automation driver
         run: |
           if (!(Test-Path "$env:USERPROFILE/.cargo/bin/tauri-driver.exe")) {
@@ -104,10 +115,11 @@ jobs:
               try { Invoke-RestMethod 'http://127.0.0.1:4444/status' | Out-Null; $ready = $true; break } catch { Start-Sleep -Milliseconds 250 }
             }
             if (!$ready) { throw 'Native automation driver did not start' }
-            python scripts/desktop-native-smoke.py --application desktop/src-tauri/target/release/basis-desktop.exe
+            python scripts/desktop-native-smoke.py --application "$env:BASIS_DESKTOP_INSTALLED_EXE"
             if ($LASTEXITCODE -ne 0) { throw 'Native application smoke checks failed' }
           } finally {
             Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
+            Get-Process basis-desktop,msedgewebview2,msedgedriver -ErrorAction SilentlyContinue | Select-Object Name,Id,SessionId,MainWindowTitle | Format-Table
             Get-Content "$env:RUNNER_TEMP/basis-driver-error.log" -ErrorAction SilentlyContinue
           }
       - name: Record installer checksum

@@ -128,6 +128,10 @@ SmartScreen warning; a successful build is not a publisher signature. Only insta
 an artifact from the intended repository/release and compare its published hash
 when one is provided. Production code signing can have a separate cost.
 
+The installer can download Microsoft Edge WebView2 if it is missing. That first
+installation needs internet access; core modeling and the packaged PDF/Excel
+readers can then run offline.
+
 The initial desktop edition does not automatically download and install updates.
 Export a portfolio backup before installing a newer release. Keep the old
 installer and backup until you have opened and checked the new version. A browser
