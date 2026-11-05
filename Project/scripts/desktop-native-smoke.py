@@ -1,4 +1,4 @@
-"""Exercise the compiled Windows app through the official Tauri WebDriver.
+"""Exercise the installed Windows app through Microsoft's WebView2 WebDriver.
 
 Uses only Python's standard library. The native driver must already be running
 on loopback. Creates fixture edits in the runner's isolated desktop workspace;
@@ -6,26 +6,27 @@ never invokes a paid AI API or opens a native save dialog.
 """
 import argparse
 import base64
-import csv
-import io
 import json
 import os
 from pathlib import Path
 import subprocess
+import socket
 import sys
+import tempfile
 import time
 import zlib
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, ProxyHandler
 
 
-def request(url, method='GET', data=None):
+def request(url, method='GET', data=None, *, unwrap=True, timeout=100):
     payload=None if data is None else json.dumps(data).encode('utf-8')
     try:
         # This helper only calls its literal loopback driver address.
         with build_opener(ProxyHandler({})).open(Request(url, data=payload, method=method,
-                             headers={'Content-Type':'application/json'}), timeout=100) as response:
-            value=json.load(response).get('value')
+                             headers={'Content-Type':'application/json'}), timeout=timeout) as response:
+            result=json.load(response)
+            value=result.get('value') if unwrap else result
     except HTTPError as error:
         body=error.read(8192).decode('utf-8',errors='replace')
         raise RuntimeError(f'Native WebDriver HTTP {error.code}: {body}') from error
@@ -38,28 +39,117 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--application',type=Path,required=True)
     parser.add_argument('--port',type=int,default=4444)
+    parser.add_argument('--log-dir',type=Path)
     args=parser.parse_args()
     if not args.application.is_file():raise RuntimeError('Compiled application is missing')
     origin=f'http://127.0.0.1:{args.port}'
+    debugger='127.0.0.1:9222'
+    debug_origin='http://'+debugger
+    log_dir=(args.log_dir or Path(tempfile.mkdtemp(prefix='basis-desktop-native-'))).resolve()
+    log_dir.mkdir(parents=True,exist_ok=True)
     session=None
-    def start():
+    application=None
+    launch_number=0
+    output_files=[]
+    output_paths=[]
+
+    def port_open():
+        try:
+            with socket.create_connection(('127.0.0.1',9222),timeout=.3):return True
+        except OSError:return False
+
+    def output_tail():
+        return '\n'.join(f'{path.name}: {path.read_text(encoding="utf-8",errors="replace")[-4000:]}'
+                         for path in output_paths if path.is_file())
+
+    def close_output_files():
+        for stream in output_files:stream.close()
+        output_files.clear()
+
+    def delete_session():
         nonlocal session
-        native={'application':str(args.application.resolve())}
-        profile=os.environ.get('WEBVIEW2_USER_DATA_FOLDER')
-        if profile:
-            # EdgeDriver must discover DevToolsActivePort in the same profile
-            # that the WebView runtime receives from its inherited environment.
-            native['webviewOptions']={'userDataFolder':str(Path(profile).resolve())}
+        if session:
+            try:request(f'{origin}/session/{session}','DELETE',timeout=10)
+            except Exception:pass
+            session=None
+
+    def wait_for_exit():
+        if application is None:raise RuntimeError('No owned desktop process is running')
+        try:code=application.wait(timeout=30)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError('The native close handler did not finish saving and exit') from error
+        close_output_files()
+        if code!=0:raise RuntimeError(f'The native application exited with code {code}.\n{output_tail()}')
+        delete_session()
+        deadline=time.monotonic()+10
+        while port_open() and time.monotonic()<deadline:time.sleep(.2)
+        if port_open():raise RuntimeError('The closed desktop process left its debugging endpoint active')
+
+    def close_host():
+        # A fast successful native close can remove the WebDriver target before
+        # execute/sync returns. The owned process exit and durable-file checks
+        # below remain authoritative; a live or failed process still fails.
+        try:run('void BASIS_DESKTOP.close();return true;')
+        except RuntimeError:pass
+        wait_for_exit()
+
+    def start():
+        nonlocal session,application,launch_number,output_paths
+        if application is not None and application.poll() is None:
+            raise RuntimeError('The previous owned desktop process has not exited')
+        if port_open():raise RuntimeError('The native debugging port is already occupied; refusing to attach to another process')
+        launch_number+=1
+        output_paths=[log_dir/f'basis-app-{launch_number}-{kind}.log' for kind in ['stdout','stderr']]
+        output_files.extend(path.open('wb') for path in output_paths)
+        environment=os.environ.copy()
+        # Debugging is enabled for this owned CI child only. The shipped binary
+        # and configuration do not expose a debugging port on normal launches.
+        extra=environment.get('WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS','').strip()
+        environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']=(extra+' --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1').strip()
+        environment['TAURI_WEBVIEW_AUTOMATION']='true'
+        application=subprocess.Popen([str(args.application.resolve())],cwd=str(args.application.resolve().parent),
+                                     env=environment,stdout=output_files[0],stderr=output_files[1])
+        print(f'Native host launch {launch_number}, PID {application.pid}; diagnostics: {log_dir}',flush=True)
+        deadline=time.monotonic()+45
+        last_error='The WebView2 debugging endpoint has not responded.'
+        while time.monotonic()<deadline:
+            if application.poll() is not None:
+                close_output_files()
+                raise RuntimeError(f'The desktop application exited before WebView2 became available (code {application.returncode}).\n{output_tail()}')
+            try:
+                version=request(debug_origin+'/json/version',unwrap=False,timeout=2)
+                if not isinstance(version,dict) or not version.get('webSocketDebuggerUrl'):
+                    raise RuntimeError('The WebView2 debugging endpoint returned an incomplete version response')
+                (log_dir/f'basis-host-{launch_number}.json').write_text(json.dumps({
+                    'pid':application.pid,'application':str(args.application.resolve()),'browser':version.get('Browser'),
+                    'protocolVersion':version.get('Protocol-Version')},indent=2),encoding='utf-8')
+                break
+            except Exception as error:last_error=str(error)
+            time.sleep(.25)
+        else:raise RuntimeError(f'The running native process did not expose its requested loopback WebView2 endpoint: {last_error}\n{output_tail()}')
         result=request(origin+'/session','POST',{'capabilities':{'alwaysMatch':{
-            'tauri:options':native}}})
+            'browserName':'webview2','ms:edgeOptions':{'debuggerAddress':debugger}}}})
         session=result['sessionId']
         request(f'{origin}/session/{session}/timeouts','POST',{'script':90000})
         deadline=time.monotonic()+45
+        last_error=None
         while time.monotonic()<deadline:
-            if run("return typeof PW!=='undefined' && !!PW.cur && document.querySelector('#startup')?.hidden;"):
-                return
+            if application.poll() is not None:raise RuntimeError(f'The native application exited during workspace startup (code {application.returncode}).\n{output_tail()}')
+            try:
+                if run("return typeof PW!=='undefined' && !!PW.cur && document.querySelector('#startup')?.hidden;"):
+                    return
+            except RuntimeError as error:last_error=str(error)
             time.sleep(.25)
-        raise RuntimeError('The native workspace did not become ready')
+        try:
+            diagnostics=run("""let backend,workspace;
+              try{backend=typeof PWS==='undefined'?null:PWS.kind;}catch(error){backend=String(error);}
+              try{workspace=typeof PW==='undefined'?null:{current:PW.cur,initialized:!!PW.ix};}catch(error){workspace=String(error);}
+              return {url:location.href,ready:document.readyState,secure:isSecureContext,title:document.title,
+                crypto:!!globalThis.crypto?.subtle,tauri:!!globalThis.__TAURI__,backend,workspace,
+                startup:document.querySelector('#startup')?.innerText?.slice(0,1500),body:document.body?.innerText?.slice(0,2500)};""")
+        except Exception as error:diagnostics={'error':str(error)}
+        (log_dir/f'basis-bootstrap-{launch_number}.json').write_text(json.dumps(diagnostics,indent=2),encoding='utf-8')
+        raise RuntimeError(f'The native workspace did not become ready: {last_error}; diagnostics={json.dumps(diagnostics)}\n{output_tail()}')
     def run(script,args=None):
         return request(f'{origin}/session/{session}/execute/sync','POST',{'script':script,'args':args or []})
     def asynchronous(script,args=None):
@@ -78,7 +168,7 @@ def main():
           return {name:S.name,index:snapshot.entries.pw_index.props.find(p=>p.id===PW.cur).name,revision:snapshot.revision};
         """)
         assert evidence['name']==evidence['index']=='Desktop persistence fixture'
-        request(f'{origin}/session/{session}','DELETE');session=None
+        close_host()
         start()
         assert run("return S.name;")=='Desktop persistence fixture'
         print('PASS real native save and process restart preserve model edits',flush=True)
@@ -137,13 +227,7 @@ def main():
           S.name='Desktop close-save fixture';DIRTY();
           return {id:PW.cur,info:await BASIS_DESKTOP.info()};
         """)
-        run('void BASIS_DESKTOP.close();return true;')
-        deadline=time.monotonic()+30
-        while time.monotonic()<deadline:
-            processes=subprocess.check_output(['tasklist','/FI','IMAGENAME eq basis-desktop.exe','/FO','CSV','/NH'],text=True)
-            if not any(row and row[0].casefold()=='basis-desktop.exe' for row in csv.reader(io.StringIO(processes))):break
-            time.sleep(.2)
-        else:raise RuntimeError('The native close handler did not finish saving and exit')
+        close_host()
         saved=json.loads((Path(closing['info']['dataDirectory'])/'workspace.json').read_text(encoding='utf-8'))
         entries=saved['entries'];record=next(item for item in entries['pw_index']['props'] if item['id']==closing['id'])
         header=entries[record.get('storageKey','pwm_'+closing['id'])]
@@ -153,9 +237,14 @@ def main():
         print('PASS native window close waits for durable model and index save',flush=True)
         print('PASS all eight installed desktop smoke checks',flush=True)
     finally:
-        if session:
-            try:request(f'{origin}/session/{session}','DELETE')
-            except Exception:pass
+        delete_session()
+        if application is not None and application.poll() is None:
+            application.terminate()
+            try:application.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                application.kill()
+                application.wait(timeout=5)
+        close_output_files()
 
 
 if __name__=='__main__':main()

@@ -55,7 +55,6 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin/tauri-driver.exe
             desktop/src-tauri/target
           key: basis-desktop-windows-v2-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
@@ -96,11 +95,8 @@ jobs:
           $application = Join-Path $destination 'basis-desktop.exe'
           if (!(Test-Path $application)) { throw 'Installed application binary is missing' }
           "BASIS_DESKTOP_INSTALLED_EXE=$application" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Install the pinned official native automation driver
+      - name: Install the matching Microsoft WebView2 automation driver
         run: |
-          if (!(Test-Path "$env:USERPROFILE/.cargo/bin/tauri-driver.exe")) {
-            cargo install tauri-driver --version 2.1.0 --locked
-          }
           $webview = Get-ChildItem "${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe" | Sort-Object FullName -Descending | Select-Object -First 1
           if (!$webview) { throw 'WebView2 runtime not found on the runner' }
           $version = $webview.VersionInfo.ProductVersion
@@ -108,19 +104,19 @@ jobs:
           Expand-Archive "$env:RUNNER_TEMP/edgedriver.zip" "$env:RUNNER_TEMP/basis-edgedriver" -Force
       - name: Exercise the compiled native WebView application
         run: |
-          $driver = Start-Process "$env:USERPROFILE/.cargo/bin/tauri-driver.exe" -ArgumentList @('--native-driver', "$env:RUNNER_TEMP/basis-edgedriver/msedgedriver.exe") -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/basis-driver.log" -RedirectStandardError "$env:RUNNER_TEMP/basis-driver-error.log"
+          $driver = Start-Process "$env:RUNNER_TEMP/basis-edgedriver/msedgedriver.exe" -ArgumentList @('--port=4444','--verbose') -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/basis-driver.log" -RedirectStandardError "$env:RUNNER_TEMP/basis-driver-error.log"
           try {
             $ready = $false
             for ($i = 0; $i -lt 40; $i++) {
               try { Invoke-RestMethod 'http://127.0.0.1:4444/status' | Out-Null; $ready = $true; break } catch { Start-Sleep -Milliseconds 250 }
             }
             if (!$ready) { throw 'Native automation driver did not start' }
-            python scripts/desktop-native-smoke.py --application "$env:BASIS_DESKTOP_INSTALLED_EXE"
+            python scripts/desktop-native-smoke.py --application "$env:BASIS_DESKTOP_INSTALLED_EXE" --log-dir "$env:RUNNER_TEMP/basis-native-logs"
             if ($LASTEXITCODE -ne 0) { throw 'Native application smoke checks failed' }
           } finally {
             Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
             Get-Process basis-desktop,msedgewebview2,msedgedriver -ErrorAction SilentlyContinue | Select-Object Name,Id,SessionId,MainWindowTitle | Format-Table
-            Get-Content "$env:RUNNER_TEMP/basis-driver-error.log" -ErrorAction SilentlyContinue
+            Get-Content "$env:RUNNER_TEMP/basis-driver-error.log" -Tail 40 -ErrorAction SilentlyContinue
           }
       - name: Record installer checksum
         run: |
@@ -147,7 +143,9 @@ jobs:
         with:
           name: Basis-desktop-failure-logs
           if-no-files-found: ignore
-          path: ${{ runner.temp }}/basis-driver*.log
+          path: |
+            ${{ runner.temp }}/basis-driver*.log
+            ${{ runner.temp }}/basis-native-logs/*
       - name: Preserve native compilation cache after validation
         if: always() && steps.native-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -156,5 +154,4 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cargo/bin/tauri-driver.exe
             desktop/src-tauri/target
