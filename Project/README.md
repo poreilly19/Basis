@@ -7,6 +7,9 @@ packaged PDF/Excel readers and optional Windows Credential Manager keys.
 Read [the desktop guide](docs/DESKTOP.md) for installation, transferring browser
 models, build commands and remaining native Windows acceptance work.
 
+[Download the Windows desktop beta](https://github.com/poreilly19/Basis/releases/tag/v0.7.30-desktop-beta.1)
+and read the [desktop validation record](docs/DESKTOP_RELEASE_0_7_30.md).
+
 Version **0.7.29** addresses confirmed financial, storage, document Apply and
 workbook interoperability bugs. See the [extensive review and validation](docs/CODE_REVIEW_0_7_29.md)
 for reproductions and affected calculations. Recheck models that use the corrected

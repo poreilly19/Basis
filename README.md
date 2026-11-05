@@ -17,6 +17,9 @@ engine, with native local saving and packaged PDF/Excel readers. See
 [desktop installation, model transfer and build instructions](Project/docs/DESKTOP.md).
 Desktop installers do not require starting Python or a local server.
 
+[Download the Windows desktop beta](https://github.com/poreilly19/Basis/releases/tag/v0.7.30-desktop-beta.1)
+and read its [validation record](Project/docs/DESKTOP_RELEASE_0_7_30.md).
+
 Web and desktop libraries are separate. Move editable properties and portfolios
 with `.basiscre` backups; installing desktop does not migrate browser data or add
 cloud synchronization. Initial Windows installers may be unsigned. Consult the

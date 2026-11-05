@@ -51,9 +51,15 @@ application SHA-256
 Exact saved-model equality, worker calculation agreement, native archive
 round-trip equality, CSP and runtime checks remain unchanged. This is evidence
 for updating the test browser, not proof of the precise upstream crash cause or
-a guarantee that it cannot recur. New-engine Chromium/WebKit and hosted matrix
-results still require their own verification. Historical validation snapshots
-retain the harness versions actually used for those runs.
+a guarantee that it cannot recur. The new Chromium and WebKit builds also passed
+their six-case beta suites locally. Local WebKit used shared libraries previously
+extracted outside the repository, linked into its separate browser cache; the
+system-library inventory check was skipped because those files are not installed
+system-wide. All browser assertions still ran. The full updated-harness local
+run passed 219 browser cases and 18 actual-library integrations. All nine hosted
+jobs subsequently passed in [run 42064899671](https://github.com/poreilly19/Basis/actions/runs/42064899671)
+for `fb3a87e41b1071f91bf7c059f43f15ec1ddefbaa`, without job retries. Historical
+validation snapshots retain the harness versions actually used for those runs.
 
 Only development tooling changes: shipped application files, financial math,
 native code and runtime-library artifact pins are unaffected. There is no

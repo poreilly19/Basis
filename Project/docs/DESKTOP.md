@@ -123,6 +123,11 @@ for any license text supplied from an upstream repository rather than its crate.
 
 ## Installation, updates and distribution
 
+Download the installer from the
+[0.7.30 Windows desktop beta release](https://github.com/poreilly19/Basis/releases/tag/v0.7.30-desktop-beta.1).
+The [release validation record](DESKTOP_RELEASE_0_7_30.md) distinguishes automated
+checks from remaining hands-on acceptance.
+
 Use Windows installers produced from this repository's desktop workflow. GitHub
 Releases can distribute the installer without a purchased domain or app store.
 The project remains MIT-licensed; its dependencies retain their own licenses.
