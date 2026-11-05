@@ -29,8 +29,10 @@ function basisCalculationClient(key='model'){
   return basisCalculationClients.get(key);
 }
 function basisRunCalculation(kind,model,key='model',options){return basisCalculationClient(key).run(kind,model,options);}
-function basisInvalidateCalculations(reason='Model changed'){
-  calcEpoch++;for(const client of basisCalculationClients.values())client.cancel(reason);
+function basisInvalidateCalculations(reason='Model changed',{preserveReport=false}={}){
+  // A debounced refresh calculates the inputs already captured by a new report.
+  // Actual edits and context changes still invalidate every client immediately.
+  calcEpoch++;for(const [key,client]of basisCalculationClients)if(!preserveReport||key!=='report-export')client.cancel(reason);
   calcJob=null;calcPending=false;basisPaneRefreshPending=false;
   for(const invalidate of basisCalculationInvalidators)invalidate(reason);
 }
@@ -55,7 +57,7 @@ function recalc(){
 }
 async function recalcInBackground(){
   clearTimeout(tmr);tmr=null;
-  const snapshot=JSON.stringify(S);basisInvalidateCalculations('New model calculation');
+  const snapshot=JSON.stringify(S);basisInvalidateCalculations('New model calculation',{preserveReport:true});
   const epoch=calcEpoch,start=Date.now();calcIssue='';R=null;calcBusy(true);renderKPI();
   const work=basisRunCalculation('property',JSON.parse(snapshot));calcJob=work;
   try{

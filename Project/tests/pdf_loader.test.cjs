@@ -6,15 +6,28 @@ const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
 const versionOf=url=>/pdf\.js\/([^/]+)\//.exec(url)[1];
 const isWorker=url=>url.endsWith('/pdf.worker.min.mjs');
 const pair=version=>({lib:{version,getDocument(){},GlobalWorkerOptions:{}},worker:{WorkerMessageHandler:{setup(){}}}});
-function fixture(){
+function fixture(globals={}){
   const timers=new Map(),sentinel={previous:'worker global'};let sequence=0;
   const context=vm.createContext({AbortController,pdfjsWorker:sentinel,
-    setTimeout:(callback,delay)=>{const id=++sequence;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id)});
+    setTimeout:(callback,delay)=>{const id=++sequence;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id),...globals});
   vm.runInContext(source,context);
   return {timers,context,sentinel,create:vm.runInContext('basisCreatePdfLoader',context),wait:vm.runInContext('basisPdfWait',context),
     expire(){const [id,timer]=timers.entries().next().value;timers.delete(id);timer.callback();}};
 }
 const hasCode=code=>error=>error.code===code;
+
+test('desktop PDF loading uses only the bundled matching version and never falls back to a CDN',async()=>{
+  const {create}=fixture({__TAURI__:{core:{invoke(){}}}}),calls=[],modules=pair('4.10.38');
+  const loader=create({loadModule:url=>{calls.push(url);return url.includes('pdf.worker-')?modules.worker:modules.lib;}});
+  const result=await loader.load();assert.equal(result.version,'4.10.38');
+  assert.deepEqual(calls,['./vendor/pdf-4.10.38.min.mjs','./vendor/pdf.worker-4.10.38.min.mjs']);
+  assert.equal(result.lib.GlobalWorkerOptions.workerSrc,'./vendor/pdf.worker-4.10.38.min.mjs');
+  calls.length=0;
+  const failed=create({loadModule:url=>{calls.push(url);throw Error('Missing local file');}});
+  await assert.rejects(failed.load(),error=>error.code==='pdf_load_failed'&&error.attempts.length===1);
+  assert.equal(calls.length,2);assert.ok(calls.every(url=>url.startsWith('./vendor/')));
+  assert.throws(()=>create({candidates:['4.4.168']}),/approved/);
+});
 
 test('concurrent loads share one complete version pair, install its URL and cache without global worker mutation',async()=>{
   const {create,timers,context,sentinel}=fixture(),lib=deferred(),worker=deferred(),calls=[];

@@ -9,3 +9,7 @@ __pycache__/
 .env.*
 dist/
 .wrangler/
+target/
+.cache/
+desktop/src-tauri/gen/
+desktop/src-tauri/generated/

@@ -1,7 +1,8 @@
-"""Fetch the exact public artifacts used only by optional integration tests.
+"""Fetch exact public artifacts for integration tests and desktop preparation.
 
 Usage: python3 scripts/fetch-test-dependencies.py /path/to/test-cache
-Runtime library bytes are never copied into the distributable application.
+Web releases load optional runtimes on demand. Desktop preparation copies only
+its selected verified runtimes from this cache, with the corresponding licenses.
 """
 import hashlib
 import json

@@ -62,6 +62,36 @@ class BetaFeaturesBrowserTests(unittest.TestCase):
         self.page.wait_for_function('offered.length===1')
         self.assertAlmostEqual(self.page.evaluate('capturedNOI'),self.page.evaluate('expectedNOI'),places=6)
 
+    def test_same_input_background_refresh_preserves_a_fresh_report_export(self):
+        self.prepare_export()
+        result=self.page.evaluate('''async()=>{
+          S.tenants[0].rent=22.55;DIRTY();const expected=calc(S).noiY1;
+          let captured=null;basisReportToXlsx=pkg=>{captured=pkg.sheets.find(s=>s.name==='Property Summary').rows.find(r=>r[0]==='Year 1 NOI')[1];return new Uint8Array([1]);};
+          pfXlsxLib=async()=>({});
+          // Start export before the pending edit refresh. Launch that refresh
+          // explicitly so the test exercises both orderings without a sleep.
+          const exporting=exportDumpXlsx();await recalcInBackground();const status=await exporting;
+          return {status,expected,captured,offered:offered.length,error:BASIS_REPORT_EXPORT.error};
+        }''')
+        self.assertEqual(result['status'],'saved',result)
+        self.assertEqual(result['offered'],1,result)
+        self.assertEqual(result['error'],'',result)
+        self.assertAlmostEqual(result['captured'],result['expected'],places=6)
+
+    def test_new_edits_still_cancel_a_running_report_calculation(self):
+        self.prepare_export()
+        result=self.page.evaluate('''async()=>{
+          pfXlsxLib=async()=>({});const exporting=exportDumpXlsx();
+          S.city='A newer report snapshot';DIRTY();
+          const cancelled=!basisCalculationClients.get('report-export').pending;
+          const status=await exporting;
+          return {status,cancelled,offered:offered.length,error:BASIS_REPORT_EXPORT.error};
+        }''')
+        self.assertTrue(result['cancelled'],result)
+        self.assertEqual(result['status'],'failed',result)
+        self.assertEqual(result['offered'],0,result)
+        self.assertIn('Model changed',result['error'])
+
     def configure(self):
         self.page.evaluate('studioOpenSettings()')
         self.page.get_by_label('AI Provider',exact=True).select_option('openai')

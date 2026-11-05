@@ -66,7 +66,7 @@ function basisSaveLabel(status=PW.status){
   if(status!=='Saved')return status||'Ready';
   if(PW.local.edited)return 'Unsaved Changes';
   const saved=pwRec(PW.cur)?.saved,time=saved?new Date(saved).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-  const where=PWS.kind==='db'?'Saved to Your Basis Account':PWS.kind==='idb'?'Saved in This Browser':'In Memory Only — Download a Backup';
+  const where=PWS.kind==='desktop'?'Saved on This Computer':PWS.kind==='db'?'Saved to Your Basis Account':PWS.kind==='idb'?'Saved in This Browser':'In Memory Only — Download a Backup';
   return where+(time?' · '+time:'');
 }
 function basisOpenExport(opener=document.activeElement,scope='property'){
@@ -89,7 +89,7 @@ function basisOpenExport(opener=document.activeElement,scope='property'){
       if(status==='failed')throw Error('The download did not complete. Try again.');if(status==='saved')dialog.close();
     }catch(e){error.textContent=e.message;error.hidden=false;}finally{busy=false;download.disabled=false;}
   }});
-  dialog.append(el('h2',{text:scope==='portfolio'?'Export Portfolio':'Export '+S.name}),el('p',{text:'Saving keeps edits in '+(PWS.kind==='db'?'your Basis account':PWS.kind==='idb'?'this browser':'this tab’s memory')+'. Download a backup to keep a separate editable copy.'}),
+  dialog.append(el('h2',{text:scope==='portfolio'?'Export Portfolio':'Export '+S.name}),el('p',{text:'Saving keeps edits in '+(PWS.kind==='desktop'?'the workspace on this computer':PWS.kind==='db'?'your Basis account':PWS.kind==='idb'?'this browser':'this tab’s memory')+'. Download a backup to keep a separate editable copy.'}),
     field('Export Type','',purpose),contentRow,error,el('div',{class:'bar'},[el('button',{class:'btn',text:'Close',onclick:()=>{if(!busy)dialog.close();}}),download]));
   dialog.addEventListener('keydown',e=>e.stopPropagation());dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
   dialog.addEventListener('close',()=>{dialog.remove();if(opener?.isConnected)opener.focus();},{once:true});document.body.append(dialog);dialog.showModal();purpose.focus();

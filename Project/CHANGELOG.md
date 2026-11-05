@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.30 — 2026-11-05 Windows desktop edition
+
+- Fix a report-export race: a delayed refresh of the same inputs no longer cancels a fresh export; newer edits and context changes still cancel stale work.
+- Add a Windows Tauri desktop edition alongside the maintained web application, using the same interface, calculation engine and native schema-v1 model format. Keep web build/deployment commands and hosted access separate.
+- Add native workspace persistence, rolling local workspace snapshots and native save dialogs. Transfer browser and desktop models through validated `.basiscre` exports/imports; no cloud synchronization or automatic browser-storage migration is introduced.
+- Package verified PDF and Excel runtimes for offline document handling. Add a fixed-provider native AI bridge and optional Windows Credential Manager storage; keys remain outside model and workspace files. AI extraction still needs a network connection and the user's provider account.
+- Add isolated desktop tooling and a Windows installer workflow. Document unsigned-installer behavior, local data/privacy, update and recovery procedures and the additional native Windows acceptance requirements. Build and test evidence is recorded separately from implementation status; no publisher signature or broad underwriting certification is claimed.
+
 ## 0.7.29 — 2026-10-28 extensive bug review
 
 - Prevent late background reads from replacing newer saved models. Keep copied and recalculated workspace metrics consistent with the exact model snapshot, including atomic manual-save behavior and recoverable failures.

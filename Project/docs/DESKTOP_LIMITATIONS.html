@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Basis Desktop — Scope and Limitations</title>
+<style>html{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.6}body{margin:0}main{max-width:52rem;margin:auto;padding:1.5rem}a{color:LinkText}h1,h2{line-height:1.25}li{margin-block:.5rem}</style>
+<body><main>
+<h1>Basis Desktop — Scope and Limitations</h1>
+<p>This is a Windows desktop beta. Review assumptions, source documents and calculations independently before using results in an investment decision. Automated tests cover defined cases; they do not certify every underwriting structure.</p>
+<ul>
+<li>The desktop and web editions share the same financial implementation and native schema v1. Their saved libraries are separate. Move editable models using .basiscre backups; installing desktop does not migrate browser data automatically.</li>
+<li>Save a .basiscre portfolio backup before upgrades or recovery. Local rolling snapshots can help recover the desktop workspace, but they are stored on the same device and do not protect against device loss. Restoring a workspace snapshot restores its whole library.</li>
+<li>Model and workspace files are not encrypted by Basis. Optional API-key storage in Windows Credential Manager does not encrypt the financial data.</li>
+<li>Packaged PDF and Excel readers support local document handling. Unsupported workbook features, external resources and ambiguous source data can still require manual review or entry.</li>
+<li>AI extraction requires a supported provider account, network access and your own API key. Provider charges are separate. Review fields and citations before Apply; a successful connection test is not an accuracy test.</li>
+<li>Report workbooks contain calculated values and assumptions. They are not editable model backups or guaranteed third-party report-template equivalents. Use .basiscre to reopen models or the separate XL4ADW template workflow for supported input fields.</li>
+<li>The initial desktop edition has no cloud synchronization, shared editing or automatic update installation. Cloudflare Access continues to protect the web deployment and does not provide desktop login.</li>
+<li>Windows installers may be unsigned and show unknown-publisher or SmartScreen warnings. A built installer is not a publisher signature. Consult the release validation record and complete native Windows save, recovery, offline import and upgrade checks on your intended device.</li>
+<li>Basis Studio's original code is available under the <a href="LICENSE.txt">MIT License</a>. Dependencies retain their own licenses; read the <a href="THIRD_PARTY_NOTICES.txt">runtime component notices</a>, <a href="NATIVE_THIRD_PARTY_NOTICES.txt">native dependency notices</a> and <a href="native-license-inventory.json">native license and source inventory</a>. The source archives listed there accompany the distribution under native-sources. Provenance and broader analyst validation reviews remain separate release work.</li>
+</ul>
+<p>Read <a href="privacy.html">Data and Privacy</a> and the release notes supplied with your installer.</p>
+</main></body></html>

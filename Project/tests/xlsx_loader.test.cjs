@@ -7,12 +7,12 @@ const methods=['book_new','aoa_to_sheet','encode_cell','encode_col','book_append
 const library=()=>({version:'0.20.3',read(){},write(){},utils:Object.fromEntries(methods.map(method=>[method,()=>{}]))});
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const flush=async()=>{for(let i=0;i<16;i++)await Promise.resolve();};
-function fixture(){
+function fixture(globals={}){
   const timers=new Map(),created=[],appended=[];let sequence=0;
   const document={createElement(tag){assert.equal(tag,'script');const node={removed:0,remove(){this.removed++;}};created.push(node);return node;},
     head:{append(node){appended.push(node);}}};
   const context=vm.createContext({AbortController,document,setTimeout:(callback,delay)=>{
-    const id=++sequence;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id)});
+    const id=++sequence;timers.set(id,{callback,delay});return id;},clearTimeout:id=>timers.delete(id),...globals});
   vm.runInContext(source,context);
   return {context,created,appended,timers,create:vm.runInContext('basisCreateXlsxLoader',context),
     expire(){const [id,timer]=timers.entries().next().value;timers.delete(id);timer.callback();}};
@@ -135,5 +135,20 @@ test('invalid loader configuration is rejected before library lookup or injectio
   for(const options of [{getLibrary:3},{loadScript:3},...[0,-1,NaN,Infinity,2147483648,'10'].map(timeoutMs=>({timeoutMs})),
     {url:''},{url:3},{integrity:''},{integrity:'sha384-unpinned'},{integrity:SRI+'extra'}]){
     assert.throws(()=>create(options),error=>error.name==='TypeError');
+  }
+});
+
+test('desktop spreadsheet loading uses the bundled pinned library without a network fallback',async()=>{
+  const {create,context,created}=fixture({__TAURI__:{core:{invoke(){}}}}),loader=create(),pending=loader.load();
+  await flush();assert.equal(created[0].src,'./vendor/xlsx-0.20.3.min.js');assert.equal(created[0].integrity,SRI);
+  created[0].onerror();await assert.rejects(pending,hasCode('xlsx_load_failed'));assert.equal(created.length,1);
+  const fresh=loader.load();await flush();context.XLSX=library();created[1].onload();assert.equal((await fresh).version,'0.20.3');
+  assert.throws(()=>create({url:URL}),/bundled library/);
+});
+
+test('a plain web global with no callable Tauri bridge keeps the hosted spreadsheet path',async()=>{
+  for(const __TAURI__ of [{},{core:{}},{core:{invoke:true}}]){
+    const {create,context,created}=fixture({__TAURI__}),pending=create().load();await flush();
+    assert.equal(created[0].src,URL);context.XLSX=library();created[0].onload();await pending;
   }
 });

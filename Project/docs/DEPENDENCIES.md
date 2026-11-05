@@ -1,20 +1,24 @@
 # Runtime dependency and provenance inventory
 
-Inventory started 2026-10-15; loading/resource and actual-runtime checks updated 2026-10-20. This is an inventory from source inspection, not a
+Inventory started 2026-10-15; desktop packaging added 2026-11-05. This is an inventory from source inspection, not a
 completed license, vulnerability, provenance or public-release clearance audit.
 
 | Component | Where used | Delivery/version | Review still required |
 | --- | --- | --- | --- |
-| SheetJS `xlsx` | Legacy `.basis.xlsx` read/write through `pfReadFile` and `pfToXLSX` in `app/index.html` | On-demand official SheetJS CDN script, version `0.20.3`, SHA-384 SRI pinned by `src/xlsx_loader.js` | Official package/distribution Apache 2.0 licenses match; notices enclosed and real workbook compatibility checks pass. Selected version is beyond the upstream affected ranges for CVE-2023-30533 and CVE-2024-22363. Complete bundled-component/provenance review and broader malicious-file coverage; see [upgrade evidence](SPREADSHEET_UPGRADE.md). |
-| PDF.js and its worker | Optional document-intake PDF text extraction and scan rendering, `src/pdf_integrity.js` / `src/pdf_loader.js` / `intPdfLib` / `intPdf` | cdnjs bytes fetched on demand, attempted in order `4.10.38`, `4.4.168`; both artifacts require exact size and SHA-256 before Blob module use | Tagged Apache 2.0 license inspected; actual dedicated-worker/text/render smoke tests pass for both verified pairs. Complete notices, broad parser/provenance review and current advisory assessment, including CVE-2024-4367, remain open. `isEvalSupported:false` is already passed by this app. |
-| OpenAI Responses / Anthropic Messages | Optional standalone document extraction, `src/ai_provider.js` | Fixed HTTPS endpoints; user-selected model; editable defaults `gpt-4.1` / `claude-sonnet-4-5` | No SDK dependency. User API keys in memory only. Fake transport/browser tests; live model/CORS/account behavior unverified. See [AI setup](WORKSPACE_SETTINGS.md). |
+| SheetJS `xlsx` | Legacy `.basis.xlsx` read/write through `pfReadFile` and `pfToXLSX` in `app/index.html` | Web: on-demand official CDN script; desktop: packaged verified artifact. Version `0.20.3`, SHA-384 SRI pinned by `src/xlsx_loader.js` | Official package/distribution Apache 2.0 licenses match; notices enclosed and real workbook compatibility checks pass. Selected version is beyond the upstream affected ranges for CVE-2023-30533 and CVE-2024-22363. Complete bundled-component/provenance review and broader malicious-file coverage; see [upgrade evidence](SPREADSHEET_UPGRADE.md). |
+| PDF.js and its worker | Optional document-intake PDF text extraction and scan rendering, `src/pdf_integrity.js` / `src/pdf_loader.js` / `intPdfLib` / `intPdf` | Web: cdnjs bytes fetched on demand, attempted in order `4.10.38`, `4.4.168`; desktop: verified local `4.10.38` pair. Both artifacts require exact size and SHA-256 before Blob module use | Tagged Apache 2.0 license inspected; actual dedicated-worker/text/render smoke tests pass for both verified pairs. Broad parser/provenance review and current advisory assessment, including CVE-2024-4367, remain open. `isEvalSupported:false` is already passed by this app. |
+| OpenAI Responses / Anthropic Messages | Optional standalone document extraction, `src/ai_provider.js` | Fixed HTTPS endpoints; user-selected model; editable defaults `gpt-4.1` / `claude-sonnet-4-5` | No provider SDK dependency. Web keys are session-only; desktop can optionally use Windows Credential Manager and a fixed-provider native HTTP bridge. Fake transport/browser tests do not establish live model/account accuracy. See [AI setup](WORKSPACE_SETTINGS.md) and [desktop behavior](DESKTOP.md). |
 | Claude host `sample` API | Optional extraction of selected document text/images, `getSample` / `intExtract` | Supplied by `window.claude.use("sample")`; no version is pinned in this repository | Confirm supported host/API version, terms, data retention and recipient controls. The prompt includes analysis start, building area and up to 60 existing tenant names/suites/areas in addition to document content. |
 | Claude host `db`, `user`, `downloads` APIs | Portfolio storage and file download adapters | Host supplied; plain-browser fallbacks also exist | Test unavailable/denied services, interrupted writes, download cancellation and migration between hosts. Record API compatibility and terms. |
 | Browser platform APIs | ZIP compression/decompression, cryptography, Office XML parsing, files, IndexedDB/local storage, rendering and clipboard | Browser provided | Record minimum supported browsers; exercise `CompressionStream` / `DecompressionStream("deflate-raw")`, secure-context APIs, worker policy and storage quota failures on target devices. |
-| Node.js | Local test runner and syntax/build checks | `package.json` requires Node 20+ | No npm packages are declared. This does not eliminate the separate browser-delivered dependencies above. |
+| Node.js | Local test runner and syntax/build checks | `package.json` requires Node 20+ | Web build/test commands need no npm dependencies. Desktop CLI dependencies are isolated in `desktop/package.json` and its lockfile. |
+| Tauri, WebView2 and native Rust dependencies | Windows desktop window, native storage/dialogs, fixed-provider HTTP and optional Credential Manager keys | Tauri CLI pinned in `desktop/package-lock.json`; Rust dependencies resolved in `desktop/src-tauri/Cargo.lock`; Windows WebView2 is a system runtime | Installer build, native Windows lifecycle/device acceptance and current advisory review remain separate checks. Generated native notices copy upstream license texts and flag MPL-2.0 source-availability review; they are not a complete SBOM or legal clearance. |
 
-The handoff contains no package lockfile, vendored runtime library code, complete transitive
-license bundle or dependency SBOM. A [test manifest](../tests/fixtures/runtime_dependencies.json)
+The web release continues to load optional runtimes on demand. Desktop includes
+verified runtime copies, accompanying component licenses and generated native
+notices/inventory. Desktop npm and Cargo lockfiles describe its build dependencies;
+the project does not claim a complete transitive dependency SBOM. A
+[runtime manifest](../tests/fixtures/runtime_dependencies.json)
 now records exact URLs, sizes and SHA-256 values for five current runtime files,
 two license texts and one previous-writer compatibility reference. Both inspected licenses identify Apache 2.0; copies are enclosed with
 [component notices](THIRD_PARTY_NOTICES.md). Transitive
@@ -24,8 +28,9 @@ worker against exact byte sizes and SHA-256 pins in `src/pdf_integrity.js`, then
 imports the reader Blob and assigns the matching worker Blob. Neither artifact
 can execute through this transport before both pass; there is no unverified
 direct-URL fallback. These checks authenticate bytes against this repository's
-pins, not their provenance or the absence of vulnerabilities. Record complete
-provenance, notices and redistribution terms before bundling runtime code. See
+pins, not their provenance or the absence of vulnerabilities. Desktop preparation
+requires exact artifact hashes; release packaging requires the generated native
+notice pair. Continue the broader provenance, notices and redistribution review. See
 [runtime tests and limitations](RUNTIME_DEPENDENCY_TESTS.md).
 
 Advisory reference identifiers above are leads for a current upstream audit, not
@@ -46,7 +51,8 @@ marks its edited text. Preserve original source evidence for review. Renaming
 labels alone does not verify provenance or establish legal clearance.
 Inventory the origin and rights for each reference, workbook template, report
 layout and sample data set; replace distinctive expression with independently
-specified workflows where necessary. No public license was selected by this review.
+specified workflows where necessary. The owner later selected MIT for Basis's
+original code; that choice does not relicense dependencies or complete this review.
 
 Legacy `.basis.json` and `.basis.xlsx` are full-model interchange paths. CSV/TSV
 in document intake are read as source text for optional AI extraction, while report

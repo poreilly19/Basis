@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Basis Desktop — Data and Privacy</title>
+<style>html{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.6}body{margin:0}main{max-width:52rem;margin:auto;padding:1.5rem}a{color:LinkText}h1,h2{line-height:1.25}li{margin-block:.5rem}</style>
+<body><main>
+<h1>Basis Desktop — Data and Privacy</h1>
+<p>Basis Desktop saves the model library to ordinary files in this Windows user's application data directory. The library is separate from the website's browser storage. Preferences and recovery drafts also use the desktop WebView's local storage. Desktop does not provide cloud synchronization, team accounts or shared editing.</p>
+<p>Model and workspace files are not encrypted by Basis. Windows account permissions and your device's security protect local access. Anyone who can access your Windows account or copy these files may be able to read the model data. Use a trusted device and keep independent .basiscre portfolio backups.</p>
+<h2>Documents and AI</h2>
+<p>Selecting and reading a document happens locally. The desktop package includes the supported PDF and spreadsheet runtimes, so reading a supported document does not require downloading those libraries.</p>
+<p>Choosing Extract sends selected document text or images, filenames, and limited property context, such as analysis start, area and existing tenants used for matching, to your selected OpenAI or Anthropic API account. Review your provider's terms and data settings before sending confidential information. AI extraction needs network access and your provider account pays usage charges.</p>
+<p>API keys remain in memory unless you explicitly choose to remember a key on this device. Remembered keys use Windows Credential Manager and are excluded from model files, workspace snapshots and support exports. Remembering a key does not encrypt the model library. An unlocked or compromised device can still expose credentials and data.</p>
+<p>Test AI Connection sends a short fixed message without document or property content. A successful connection test or matching document total does not verify extraction accuracy. Review proposed fields and their source evidence before Apply.</p>
+<h2>Backups, deletion and updates</h2>
+<p>Rolling workspace backups are local recovery copies in the application data directory, not independent off-device backups. A workspace snapshot may contain every portfolio saved in this desktop workspace. Exported .basiscre files and report workbooks contain the data you choose to export; protect them as you would the source documents.</p>
+<p>Deleting application data can remove saved models, preferences, recovery drafts and local backups. Deleting a model from the current workspace does not erase earlier backups, exported files or data already sent to an AI provider. Manage remembered API keys separately from model files. Export backups before upgrades, recovery or uninstalling.</p>
+<h2>Other requests and feedback</h2>
+<p>Basis does not add analytics or automatic model/error uploads. The initial desktop edition does not automatically download updates. Installing or updating Windows components and manually downloading a release can contact their respective services. AI requests contact the selected provider.</p>
+<p>Cloudflare Access protects the hosted website; it does not protect local desktop copies or synchronize their storage. For public bug reports, include the version, Windows version, reproduction steps and a synthetic example. Do not post API keys, leases, rent rolls, tenant personal data or unredacted screenshots.</p>
+<p>Read <a href="limitations.html">Scope and Limitations</a>, the <a href="LICENSE.txt">MIT License</a>, <a href="THIRD_PARTY_NOTICES.txt">runtime component notices</a>, <a href="NATIVE_THIRD_PARTY_NOTICES.txt">native dependency notices</a> and the <a href="native-license-inventory.json">native license and source inventory</a>.</p>
+</main></body></html>

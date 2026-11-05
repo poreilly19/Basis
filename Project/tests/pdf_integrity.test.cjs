@@ -41,6 +41,18 @@ function setup(adapters={},globals={}){
 }
 const code=expected=>error=>error.code===expected;
 
+test('desktop transport only fetches bundled bytes and keeps exact audited size/hash validation',async()=>{
+  const f=setup(),calls=[];f.context.__TAURI__={core:{invoke(){}}};
+  const transport=f.factory({fetchImpl:async url=>{calls.push(url);return response(new Uint8Array(1));}});
+  await assert.rejects(transport.load('4.10.38'),code('pdf_integrity_size'));
+  assert.deepEqual(calls,['./vendor/pdf-4.10.38.min.mjs','./vendor/pdf.worker-4.10.38.min.mjs']);
+  await assert.rejects(transport.load('4.4.168'),code('pdf_integrity_version'));
+  const pins=JSON.parse(vm.runInContext('JSON.stringify(BASIS_PDF_ARTIFACTS)',f.context));
+  assert.throws(()=>f.factory({artifacts:pins}),/bundled artifacts/);
+  const local={'4.10.38':pins['4.10.38']};local['4.10.38'].reader.url='./vendor/pdf-4.10.38.min.mjs';local['4.10.38'].worker.url='./vendor/pdf.worker-4.10.38.min.mjs';
+  local['4.10.38'].reader.sha256='0'.repeat(64);assert.throws(()=>f.factory({artifacts:local}),/bundled artifacts/);
+});
+
 test('all four deeply frozen production artifact pins exactly match the audited runtime manifest',()=>{
   const {context}=setup(),pins=vm.runInContext('BASIS_PDF_ARTIFACTS',context);
   const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/runtime_dependencies.json'),'utf8'));

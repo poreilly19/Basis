@@ -34,7 +34,7 @@ function studioSettingsPane(existing){
   // Reuse the live controls so an unrelated preference update or background
   // redraw does not discard an unapplied provider/model/key or keyboard focus.
   if(existing&&existing.basisRefresh){existing.basisRefresh();return existing;}
-  const prefs=BASIS_PREFS.get(),storage=BASIS_PREFS.status();
+  const prefs=BASIS_PREFS.get(),storage=BASIS_PREFS.status(),desktop=typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available;
   const control=(label,help,input)=>{input.setAttribute('aria-label',label);return field(label,help,input);};
   const theme=el('select',{onchange:e=>studioSetPreference({theme:e.target.value})},[['system','Use System Setting'],['light','Light'],['dark','Dark']].map(([value,text])=>el('option',{value,text})));theme.value=prefs.theme;
   const autosave=el('input',{type:'checkbox',onchange:e=>studioSetPreference({autosave:e.target.checked})});autosave.checked=prefs.autosave;
@@ -44,7 +44,7 @@ function studioSettingsPane(existing){
     control('Appearance','Choose Light, Dark, or follow your device.',theme),
     control('Autosave While Editing','Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
     control('Fit Columns to Content','Turn off to use uniform column widths in scrollable tables.',fit),
-    el('p',{class:'hint',text:'These preferences apply in this browser and are separate from your property files.'}),
+    el('p',{class:'hint',text:desktop?'These preferences apply to this desktop installation and are separate from your property files.':'These preferences apply in this browser and are separate from your property files.'}),
     storageMessage])]);
   let status=basisAIStatus(),editingAI=false,setupError='',connectionController=null,connectionGeneration=0;
   const provider=el('select',{'aria-label':'AI Provider'},[['host','Host Integration'],['openai','OpenAI'],['anthropic','Anthropic']].map(([value,text])=>el('option',{value,text})));provider.value=status.provider;
@@ -64,12 +64,32 @@ function studioSettingsPane(existing){
     testConnection.disabled=!!connectionController||editingAI||!status.configured||status.provider==='host';cancelConnection.hidden=!connectionController;
     key.placeholder=same&&status.configured&&selected!=='host'?'Key configured for this session':'Paste your API key';
   };
-  const configure=()=>{stopConnection();try{status=basisAIStatus();const options={provider:provider.value,model:model.value.trim()};if(key.value.trim()||provider.value!==status.provider||!status.configured)options.apiKey=key.value.trim();basisConfigureAI(options);key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError=error.message||'AI setup could not be updated.';updateMessage();}};
-  const modelRow=control('AI Model','Use a model available to your API account.',model),keyRow=control('API Key','Kept in memory for this tab; enter it again after reloading.',key);
+  const configure=()=>{stopConnection();try{status=basisAIStatus();const options={provider:provider.value,model:model.value.trim()};if(key.value.trim()||provider.value!==status.provider||!status.configured)options.apiKey=key.value.trim();basisConfigureAI(options);if(desktop&&(options.provider==='host'||options.apiKey!==undefined&&options.apiKey!==BASIS_DESKTOP.credentialMarker))basisDesktopAIChoice(null);key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError=error.message||'AI setup could not be updated.';updateMessage();}};
+  const modelRow=control('AI Model','Use a model available to your API account.',model),keyRow=control('API Key',desktop?'Session only unless you choose Remember Key on This Device.':'Kept in memory for this tab; enter it again after reloading.',key);
   const updateFields=()=>{const host=provider.value==='host';modelRow.hidden=host;keyRow.hidden=host;model.value=provider.value===status.provider?status.model:provider.value==='openai'?'gpt-4.1':provider.value==='anthropic'?'claude-sonnet-4-5':'';key.value='';updateMessage();};
   provider.onchange=()=>{stopConnection();editingAI=true;setupError='';updateFields();};
   model.oninput=key.oninput=()=>{stopConnection();editingAI=true;setupError='';updateMessage();};
-  const clearKey=studioBtn('Clear API Key',()=>{stopConnection();const current=basisAIStatus();basisConfigureAI({provider:current.provider,model:current.model,apiKey:''});key.value='';editingAI=false;setupError='';drawPane();});
+  const clearKey=studioBtn('Clear API Key',async()=>{stopConnection();const current=basisAIStatus();try{if(desktop&&current.provider!=='host'){await BASIS_DESKTOP.deleteKey(current.provider);basisDesktopAIChoice(null);}basisConfigureAI({provider:current.provider,model:current.model,apiKey:''});key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError='Could not clear the saved API key: '+(error.message||error);updateMessage();}});
+  let credentialBusy=false;
+  const nativeCredential=async(action)=>{if(credentialBusy)return;credentialBusy=true;stopConnection();setupError='';
+    const selected=provider.value,selectedModel=model.value.trim(),enteredKey=key.value.trim();
+    try{
+      if(selected==='host')throw Error('Select OpenAI or Anthropic first.');
+      if(action==='forget'){await BASIS_DESKTOP.deleteKey(selected);basisDesktopAIChoice(null);const current=basisAIStatus();if(current.provider===selected)basisConfigureAI({provider:selected,model:current.model,apiKey:''});}
+      else{
+        if(!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/.test(selectedModel))throw Error('Enter a valid AI model ID.');
+        if(action==='remember'){if(!enteredKey)throw Error('Paste the API key before choosing Remember Key on This Device.');await BASIS_DESKTOP.storeKey(selected,enteredKey);}
+        else if(!await BASIS_DESKTOP.keyStatus(selected))throw Error('No key is saved for this provider. Paste a key and choose Remember Key on This Device.');
+        if(provider.value!==selected||model.value.trim()!==selectedModel||key.value.trim()!==enteredKey)throw Error('Key storage completed. Your AI setup changed; choose Use Saved Key when ready.');
+        basisConfigureAI({provider:selected,model:selectedModel,apiKey:BASIS_DESKTOP.credentialMarker});basisDesktopAIChoice({provider:selected,model:selectedModel});
+      }
+      key.value='';editingAI=false;setupError='';drawPane();connectionResult.textContent=action==='forget'?'Saved key removed from this device.':'Using the key saved in Windows Credential Manager. Use Test AI Connection before extracting.';
+    }catch(error){setupError=error.message||'The saved key could not be updated.';updateMessage();}
+    finally{credentialBusy=false;}
+  };
+  const credentials=desktop?el('div',{'data-desktop-credentials':''},[
+    el('p',{class:'hint',text:'Optional: save your key in Windows Credential Manager. Property files, backups, and support downloads never include the key.'}),
+    el('div',{class:'bar'},[studioBtn('Remember Key on This Device',()=>nativeCredential('remember')),studioBtn('Use Saved Key',()=>nativeCredential('use')),studioBtn('Forget Saved Key',()=>nativeCredential('forget'))])]):null;
   const testConnection=studioBtn('Test AI Connection',async()=>{
     if(editingAI||connectionController||!basisAIStatus().configured||basisAIStatus().provider==='host')return;
     const ctl=new AbortController(),run=++connectionGeneration,generation=basisAIGeneration;connectionController=ctl;
@@ -82,14 +102,14 @@ function studioSettingsPane(existing){
   const cancelConnection=studioBtn('Cancel Connection Test',()=>{stopConnection();connectionResult.textContent='Connection test cancelled.';updateMessage();});
   const ai=el('section',{class:'card'},[el('h3',{text:'AI Document Extraction'}),el('div',{class:'body'},[
     el('p',{text:'Read leases, rent rolls, and operating statements, then review suggested inputs before applying them.'}),
-    control('AI Provider','Use your API account or an available host integration.',provider),modelRow,keyRow,message,
+    control('AI Provider','Use your API account or an available host integration.',provider),modelRow,keyRow,message,credentials,
     el('p',{class:'hint',text:'Extract sends selected document text or images and limited property context directly to the selected provider. Your API account pays any usage charges. Saving this setup sends no documents.'}),
     el('div',{class:'bar'},[
       studioBtn('Use AI Setup',configure,true),
       clearKey,testConnection,cancelConnection,
       studioBtn('Open Document Import',studioOpenDocumentImport)]),
     el('p',{class:'hint',text:'Test AI Connection sends a short test message to your configured API provider and may incur a small usage charge. It sends no documents or property data.'}),connectionResult])]);
-  const pane=el('div',{class:'grid2',id:'basisWorkspaceSettings'},[general,ai]);
+  const pane=el('div',{class:'grid2',id:'basisWorkspaceSettings'},[general,ai,...(desktop?[basisDesktopSettingsPane()]:[])]);
   pane.basisRefresh=()=>{
     const current=BASIS_PREFS.get(),saved=BASIS_PREFS.status();theme.value=current.theme;autosave.checked=current.autosave;fit.checked=current.autoFitColumns;
     storageMessage.hidden=!saved.error;storageMessage.textContent=saved.error||'';status=basisAIStatus();

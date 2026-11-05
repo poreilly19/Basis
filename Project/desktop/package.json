@@ -1,0 +1,14 @@
+{
+  "name": "basis-desktop-build",
+  "version": "0.7.30",
+  "private": true,
+  "license": "MIT",
+  "description": "Pinned Windows desktop build tools for Basis Studio",
+  "scripts": {
+    "dev": "npm --prefix .. run desktop:prepare && tauri dev",
+    "build": "npm --prefix .. run desktop:prepare && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

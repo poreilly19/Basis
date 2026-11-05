@@ -21,7 +21,7 @@ assert.equal((html.match(/\bid=["']basis-calculation-worker["']/g)||[]).length,1
 assert.doesNotMatch(expectedWorker,/<\/script/i,'Worker source must escape closing script tags');
 new vm.Script(expectedWorker,{filename:'calculation-worker.js'});
 const application=html.slice(0,start)+html.slice(end+workerEnd.length),positions=new Map();
-for(const name of ['beta_ui.js','report_export.js','intake_reconciliation.js','intake_amendments.js','intake_quality.js','intake_review.js','model_checks.js','guided_ui.js','number_inputs.js','navigation_ui.js','workflow_ui.js','tenant_groups.js','workspace_preferences.js','workspace_settings_ui.js','ai_provider.js','financial_engine.js','scenario_settings.js','native_codec.js','recovery_store.js','native_ui.js','calculation_client.js','calculation_ui.js','office_zip.js','pdf_integrity.js','pdf_loader.js','image_safety.js','workspace_validation.js','xlsx_loader.js']){
+for(const name of ['desktop_bridge.js','beta_ui.js','report_export.js','intake_reconciliation.js','intake_amendments.js','intake_quality.js','intake_review.js','model_checks.js','guided_ui.js','number_inputs.js','navigation_ui.js','workflow_ui.js','tenant_groups.js','workspace_preferences.js','workspace_settings_ui.js','ai_provider.js','financial_engine.js','scenario_settings.js','native_codec.js','recovery_store.js','native_ui.js','calculation_client.js','calculation_ui.js','office_zip.js','pdf_integrity.js','pdf_loader.js','image_safety.js','workspace_validation.js','xlsx_loader.js']){
   const text=inline(source(name)),at=application.indexOf(text);positions.set(name,at);
   assert.ok(at>=0,'app/index.html embedded module differs from src/'+name);
   assert.equal(application.indexOf(text,at+1),-1,'Canonical application module is duplicated: '+name);
@@ -30,6 +30,7 @@ for(const [before,after]of [['financial_engine.js','scenario_settings.js'],['sce
   ['native_codec.js','recovery_store.js'],['recovery_store.js','native_ui.js'],['calculation_client.js','calculation_ui.js'],['pdf_integrity.js','pdf_loader.js'],['workspace_preferences.js','workspace_settings_ui.js'],['ai_provider.js','workspace_settings_ui.js']]){
   assert.ok(positions.get(before)<positions.get(after),before+' must be embedded before '+after);
 }
+assert.ok(positions.get('desktop_bridge.js')<application.indexOf('const BASIS_AI='),'Desktop bridge must precede AI provider creation');
 const nativeUiStart=application.indexOf('/* Native model sharing —'),nativeUiEnd=application.indexOf('/* =========================== PORTFOLIOS',nativeUiStart);
 assert.ok(nativeUiStart>=0&&nativeUiEnd>nativeUiStart,'Native UI region boundaries must be present');
 for(const name of ['scenario_settings.js','recovery_store.js','calculation_client.js','calculation_ui.js']){
@@ -42,7 +43,7 @@ for(const m of application.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/g)
   new vm.Script(m[2],{filename:'inline-'+(++scripts)+'.js'});
 }
 assert.ok(scripts>=1);
-console.log('PASS app embeds twenty-eight matching canonical modules in dependency order');
+console.log('PASS app embeds twenty-nine matching canonical modules in dependency order');
 console.log('PASS inert calculation worker exactly matches its four canonical source modules and parses');
 console.log('PASS '+scripts+' inline script(s) parse successfully');
 

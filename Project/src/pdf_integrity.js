@@ -14,11 +14,15 @@ const BASIS_PDF_ARTIFACTS=Object.freeze({
 // Successful reader/worker Blob URLs belong to this transport's lifetime, not
 // to one loader attempt or one PDF. The app retains at most two verified pairs
 // until its owner explicitly disposes the transport after all PDFs are done.
-function basisCreatePdfTransport({artifacts=BASIS_PDF_ARTIFACTS,
+function basisCreatePdfTransport({artifacts,
   fetchImpl=(...args)=>{if(typeof fetch!=="function")throw Error("PDF verification requires Fetch.");return fetch(...args);},
   digestImpl=bytes=>{if(typeof crypto==="undefined"||!crypto.subtle||typeof crypto.subtle.digest!=="function")throw Error("PDF verification requires Web Crypto SHA-256.");return crypto.subtle.digest("SHA-256",bytes);},
   importModule=url=>import(url),
   createObjectURL=blob=>URL.createObjectURL(blob),revokeObjectURL=url=>URL.revokeObjectURL(url)}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function"),
+    localUrls={reader:"./vendor/pdf-4.10.38.min.mjs",worker:"./vendor/pdf.worker-4.10.38.min.mjs"};
+  if(artifacts===undefined)artifacts=desktop?{"4.10.38":Object.fromEntries(["reader","worker"].map(kind=>
+    [kind,{...BASIS_PDF_ARTIFACTS["4.10.38"][kind],url:localUrls[kind]}]))}:BASIS_PDF_ARTIFACTS;
   for(const adapter of [fetchImpl,digestImpl,importModule,createObjectURL,revokeObjectURL]){
     if(typeof adapter!=="function")throw new TypeError("PDF integrity adapters must be functions.");
   }
@@ -40,9 +44,16 @@ function basisCreatePdfTransport({artifacts=BASIS_PDF_ARTIFACTS,
         typeof artifact.sha256!=="string"||!/^[0-9a-f]{64}$/.test(artifact.sha256)){
         throw new TypeError("PDF artifact metadata has an invalid URL, size or SHA-256.");
       }
-      let parsed;try{parsed=new URL(artifact.url);}catch(_){throw new TypeError("PDF artifact URL must be HTTPS.");}
-      if(parsed.protocol!=="https:"||parsed.username||parsed.password||parsed.hash||urls.has(artifact.url)){
-        throw new TypeError("PDF artifact URLs must be distinct HTTPS URLs without credentials or fragments.");
+      if(desktop){
+        const pin=BASIS_PDF_ARTIFACTS["4.10.38"][kind];
+        if(version!=="4.10.38"||artifact.url!==localUrls[kind]||artifact.size!==pin.size||artifact.sha256!==pin.sha256){
+          throw new TypeError("The desktop PDF reader must use its pinned bundled artifacts.");
+        }
+      }else{
+        let parsed;try{parsed=new URL(artifact.url);}catch(_){throw new TypeError("PDF artifact URL must be HTTPS.");}
+        if(parsed.protocol!=="https:"||parsed.username||parsed.password||parsed.hash||urls.has(artifact.url)){
+          throw new TypeError("PDF artifact URLs must be distinct HTTPS URLs without credentials or fragments.");
+        }
       }
       urls.add(artifact.url);snapshot[kind]={url:artifact.url,size:artifact.size,sha256:artifact.sha256};
     }

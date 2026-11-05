@@ -1,0 +1,133 @@
+name: Basis Windows desktop
+
+"on":
+  push:
+    paths:
+      - '**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - '**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: basis-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows native tests and installer
+    runs-on: windows-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: .
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      BASIS_RUNTIME_CACHE: ${{ runner.temp }}/basis-runtime-dependencies
+      WEBVIEW2_USER_DATA_FOLDER: ${{ runner.temp }}/basis-desktop-webview
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned native toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+          rustup override set 1.99.1
+      - name: Restore native build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/tauri-driver.exe
+            desktop/src-tauri/target
+          key: basis-desktop-windows-v1-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: basis-desktop-windows-v1-
+      - name: Install isolated pinned desktop CLI
+        run: npm ci --prefix desktop --ignore-scripts
+      - name: Restore public document runtime cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/basis-runtime-dependencies
+          key: basis-runtime-${{ runner.os }}-${{ hashFiles('tests/fixtures/runtime_dependencies.json') }}
+      - name: Verify exact runtime artifacts
+        run: python scripts/fetch-test-dependencies.py "$env:BASIS_RUNTIME_CACHE"
+      - name: Verify native formatting and generate license inventory
+        run: |
+          cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check
+          New-Item -ItemType Directory -Force desktop/src-tauri/generated | Out-Null
+          cargo metadata --manifest-path desktop/src-tauri/Cargo.toml --locked --format-version 1 --filter-platform x86_64-pc-windows-msvc > desktop/src-tauri/generated/cargo-metadata.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/native-notices.cjs --metadata desktop/src-tauri/generated/cargo-metadata.json
+      - name: Build verified offline desktop assets
+        run: |
+          npm run build
+          node scripts/build-desktop.cjs --cache "$env:BASIS_RUNTIME_CACHE" --offline --require-native-notices
+      - name: Test native persistence and transport boundaries
+        run: cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm exec -- tauri build --no-sign -- --locked
+      - name: Install the pinned official native automation driver
+        run: |
+          if (!(Test-Path "$env:USERPROFILE/.cargo/bin/tauri-driver.exe")) {
+            cargo install tauri-driver --version 2.1.0 --locked
+          }
+          $webview = Get-ChildItem "${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$webview) { throw 'WebView2 runtime not found on the runner' }
+          $version = $webview.VersionInfo.ProductVersion
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP/edgedriver.zip"
+          Expand-Archive "$env:RUNNER_TEMP/edgedriver.zip" "$env:RUNNER_TEMP/basis-edgedriver" -Force
+      - name: Exercise the compiled native WebView application
+        run: |
+          $driver = Start-Process "$env:USERPROFILE/.cargo/bin/tauri-driver.exe" -ArgumentList @('--native-driver', "$env:RUNNER_TEMP/basis-edgedriver/msedgedriver.exe") -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/basis-driver.log" -RedirectStandardError "$env:RUNNER_TEMP/basis-driver-error.log"
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 40; $i++) {
+              try { Invoke-RestMethod 'http://127.0.0.1:4444/status' | Out-Null; $ready = $true; break } catch { Start-Sleep -Milliseconds 250 }
+            }
+            if (!$ready) { throw 'Native automation driver did not start' }
+            python scripts/desktop-native-smoke.py --application desktop/src-tauri/target/release/basis-desktop.exe
+            if ($LASTEXITCODE -ne 0) { throw 'Native application smoke checks failed' }
+          } finally {
+            Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
+            Get-Content "$env:RUNNER_TEMP/basis-driver-error.log" -ErrorAction SilentlyContinue
+          }
+      - name: Record installer checksum
+        run: |
+          Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | ForEach-Object {
+            $digest = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$digest  $($_.Name)" | Set-Content -Encoding utf8NoBOM "$($_.FullName).sha256"
+          }
+      - name: Upload tested installer and notices
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Basis-Studio-Windows-0.7.30
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*.sha256
+            desktop/src-tauri/generated/NATIVE_THIRD_PARTY_NOTICES.txt
+            desktop/src-tauri/generated/native-license-inventory.json
+            desktop/src-tauri/generated/native-sources/*.crate
+            dist/basis-desktop/desktop-release.json
+      - name: Upload native automation logs on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Basis-desktop-failure-logs
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/basis-driver*.log

@@ -45,14 +45,16 @@ function basisPdfWait(work,{timeoutMs=30000,signal,label="PDF operation",onStop}
   });
 }
 
-function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates=["4.10.38","4.4.168"]}={}){
+function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function");
+  if(candidates===undefined)candidates=desktop?["4.10.38"]:["4.10.38","4.4.168"];
   if(loadModule!==undefined&&typeof loadModule!=="function")throw new TypeError("PDF module loading must be a function.");
   if(transport!==undefined&&(!transport||typeof transport.load!=="function"))throw new TypeError("PDF transport must provide load().");
   if(transport!==undefined&&loadModule!==undefined)throw new TypeError("Choose either a PDF transport or a trusted injected module loader.");
   if(typeof timeoutMs!=="number"||!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>2147483647){
     throw new TypeError("PDF module timeout must be a positive number no greater than 2147483647 milliseconds.");
   }
-  const approved=new Set(["4.10.38","4.4.168"]);
+  const approved=new Set(desktop?["4.10.38"]:["4.10.38","4.4.168"]);
   if(!Array.isArray(candidates)||!candidates.length||candidates.length>approved.size||
     candidates.some(version=>!approved.has(version))||new Set(candidates).size!==candidates.length){
     throw new TypeError("PDF reader candidates must be distinct approved 4.x versions: 4.10.38 and 4.4.168.");
@@ -81,13 +83,15 @@ function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates=[
     const attempts=[];let last;
     for(const version of versions){
       if(!current(request))return;
-      const base="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+version+"/",workerUrl=base+"pdf.worker.min.mjs",
+      const base="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+version+"/",
+        readerUrl=desktop?"./vendor/pdf-"+version+".min.mjs":base+"pdf.min.mjs",
+        workerUrl=desktop?"./vendor/pdf.worker-"+version+".min.mjs":base+"pdf.worker.min.mjs",
         candidate=new AbortController(),abort=()=>candidate.abort(request.controller.signal.reason);
       request.controller.signal.addEventListener("abort",abort,{once:true});
       if(request.controller.signal.aborted)abort();
       try{
         const work=()=>verifiedTransport?verifiedTransport.load(version,{signal:candidate.signal}):Promise.all([
-          Promise.resolve().then(()=>loadModule(base+"pdf.min.mjs")),
+          Promise.resolve().then(()=>loadModule(readerUrl)),
           Promise.resolve().then(()=>loadModule(workerUrl))
         ]).then(([lib,worker])=>({lib,worker,version,workerUrl,verified:false}));
         const pair=await basisPdfWait(work,{timeoutMs,signal:request.controller.signal,label:"PDF.js "+version+" modules",

@@ -1,4 +1,11 @@
-# Basis Studio — reviewed Codex handoff (v7.29 beta candidate)
+# Basis Studio — web and Windows desktop (v7.30 beta candidate)
+
+Version **0.7.30** adds a Windows desktop edition alongside the maintained web
+application. Both use the same interface, calculation engine and `.basiscre`
+format. Desktop adds native local workspace saving, rolling local backups,
+packaged PDF/Excel readers and optional Windows Credential Manager keys.
+Read [the desktop guide](docs/DESKTOP.md) for installation, transferring browser
+models, build commands and remaining native Windows acceptance work.
 
 Version **0.7.29** addresses confirmed financial, storage, document Apply and
 workbook interoperability bugs. See the [extensive review and validation](docs/CODE_REVIEW_0_7_29.md)
@@ -56,7 +63,21 @@ Version 7.25 restores the reference’s **Portfolio / Inputs / Reports** modes,
 Settings and Document Import remain beside the portfolio result tabs. See the
 [button layout and action mapping](docs/RIBBON_0_7_25.md).
 
-## Cloudflare beta preparation
+## Web deployment and desktop builds
+
+The hosted web beta remains at **https://basis.pjoreilly19.workers.dev/** with its
+existing owner-only Google/Cloudflare Access policy. Owner login is confirmed;
+broader beta acceptance is tracked separately. See the
+[Workers deployment guide](docs/CLOUDFLARE_WORKERS_BETA.md). The desktop edition
+does not replace this deployment, inherit its login or synchronize with browser
+storage. Transfer complete editable models through `.basiscre` export/import.
+
+Build the web application with `npm run build:beta` and `npm run verify:beta`.
+Desktop tooling is isolated in `desktop`; use `npm ci --prefix desktop`, then
+`npm run desktop:prepare`, `npm run desktop:dev` or `npm run desktop:build` on a
+Windows development machine with the prerequisites in the [desktop guide](docs/DESKTOP.md).
+
+The following sections retain earlier web-build background.
 
 Version 7.27 adds the [Cloudflare Pages + Access setup](docs/CLOUDFLARE_BETA.md),
 release/access verification commands, and **File → About Basis** with version,
@@ -66,15 +87,16 @@ expense and ground-rent details in report workbooks. See the
 
 Build with `npm run build:beta`, then `npm run verify:beta`. Upload only
 `dist/basis-beta` after production and preview Access checks pass. The account
-and allowlist still need configuration; the package itself provides no login.
+and allowlist belong to the hosting configuration; the static package itself
+provides no login. The current selected deployment uses Workers, not Pages.
 
 ## Preview the app
 
 Version 7.26 adds **Portfolio → Reports ribbon → Report Workbook → Download Report Workbook (.xlsx)**
 and **Portfolio → Settings → Test AI Connection**. It also includes a minimal
 static hosting build. Read the [beta deployment handoff](docs/BETA_DEPLOYMENT_0_7_26.md)
-and [current validation](docs/VALIDATION_0_7_26.md). No site has been published;
-the deployment bundle does not provide login or cloud synchronization.
+and [current validation](docs/VALIDATION_0_7_26.md). The static deployment bundle
+does not itself provide login or cloud synchronization.
 
 On Windows, extract the entire ZIP and double-click **Start Basis.cmd** inside
 `Basis_Studio_Codex`. It checks for Python 3.10+, starts the app at
@@ -136,15 +158,16 @@ and [validation](docs/VALIDATION_0_7_24.md).
 
 1. Extract this ZIP to a local project folder, e.g. `Documents\\basis-studio`.
 2. Open that folder in the ChatGPT desktop app's **Codex** view, or in VS Code with the Codex extension, or run `codex` from a terminal in the folder.
-3. Install Node.js 20+ and Python 3.10+, then run `npm test` and `npm run test:runner` (no npm packages required).
+3. Install Node.js 20+ and Python 3.10+, then run `npm test` and `npm run test:runner` (no npm packages required for the web checks).
 4. Preview using **Start Basis.cmd** or `python3 scripts/start-basis.py`, as described above. A full browser is needed; an attachment preview may block scripts.
 5. Copy the text in `CODEX_START_HERE.md` into your first Codex task, or simply ask Codex to read `AGENTS.md` and `CODEX_START_HERE.md`.
 
 ## Workspace and AI setup
 
 Open **Portfolio → Settings** for theme, autosave, table columns and your own
-OpenAI/Anthropic API key. Keys last only for this tab and are never saved in
-property files. Use **Portfolio → Document Import** to upload leases, rent rolls
+OpenAI/Anthropic API key. Web keys last only for this tab; desktop can optionally
+remember a key using Windows Credential Manager. Keys are never saved in
+property or portfolio files. Use **Portfolio → Document Import** to upload leases, rent rolls
 or operating statements, extract proposed inputs, review them, then Apply.
 **Configure AI** also opens directly in Document Import, keeping your upload in place.
 See [settings and document AI](docs/WORKSPACE_SETTINGS.md) for setup and limits.

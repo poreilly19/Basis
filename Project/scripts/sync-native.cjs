@@ -18,6 +18,7 @@ if(occurrences(workerStart)||occurrences(workerEnd)){
   html=html.slice(0,start)+html.slice(end+workerEnd.length);
 }
 const regions = [
+  ['desktop_bridge.js','/* BEGIN BASIS DESKTOP BRIDGE */','/* END BASIS DESKTOP BRIDGE */','const AI={text:'],
   ['beta_ui.js','/* BEGIN BASIS BETA UI */','/* END BASIS BETA UI */','const studioBtn='],
   ['report_export.js','/* BEGIN BASIS REPORT EXPORT */','/* END BASIS REPORT EXPORT */','/* Basis report tables:'],
   ['intake_reconciliation.js','/* BEGIN BASIS INTAKE RECONCILIATION */','/* END BASIS INTAKE RECONCILIATION */','const studioBtn='],

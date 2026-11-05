@@ -3591,8 +3591,10 @@ function basisCalculationClient(key='model'){
   return basisCalculationClients.get(key);
 }
 function basisRunCalculation(kind,model,key='model',options){return basisCalculationClient(key).run(kind,model,options);}
-function basisInvalidateCalculations(reason='Model changed'){
-  calcEpoch++;for(const client of basisCalculationClients.values())client.cancel(reason);
+function basisInvalidateCalculations(reason='Model changed',{preserveReport=false}={}){
+  // A debounced refresh calculates the inputs already captured by a new report.
+  // Actual edits and context changes still invalidate every client immediately.
+  calcEpoch++;for(const [key,client]of basisCalculationClients)if(!preserveReport||key!=='report-export')client.cancel(reason);
   calcJob=null;calcPending=false;basisPaneRefreshPending=false;
   for(const invalidate of basisCalculationInvalidators)invalidate(reason);
 }
@@ -3617,7 +3619,7 @@ function recalc(){
 }
 async function recalcInBackground(){
   clearTimeout(tmr);tmr=null;
-  const snapshot=JSON.stringify(S);basisInvalidateCalculations('New model calculation');
+  const snapshot=JSON.stringify(S);basisInvalidateCalculations('New model calculation',{preserveReport:true});
   const epoch=calcEpoch,start=Date.now();calcIssue='';R=null;calcBusy(true);renderKPI();
   const work=basisRunCalculation('property',JSON.parse(snapshot));calcJob=work;
   try{
@@ -5956,8 +5958,11 @@ PANES["portfolio.value"]=()=>{
 // could later replace. Removing a pending script is best-effort cancellation;
 // it does not guarantee that already downloaded JavaScript will not execute.
 function basisCreateXlsxLoader({getLibrary=()=>globalThis.XLSX,loadScript,timeoutMs=10000,
-  url="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+  url,
   integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function");
+  if(url===undefined)url=desktop?"./vendor/xlsx-0.20.3.min.js":"https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  if(desktop&&url!=="./vendor/xlsx-0.20.3.min.js")throw new TypeError("The desktop spreadsheet reader must use its bundled library.");
   if(typeof getLibrary!=="function")throw new TypeError("Spreadsheet library lookup must be a function.");
   if(loadScript!==undefined&&typeof loadScript!=="function")throw new TypeError("Spreadsheet script loading must be a function.");
   if(typeof timeoutMs!=="number"||!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>2147483647){
@@ -6848,11 +6853,15 @@ const BASIS_PDF_ARTIFACTS=Object.freeze({
 // Successful reader/worker Blob URLs belong to this transport's lifetime, not
 // to one loader attempt or one PDF. The app retains at most two verified pairs
 // until its owner explicitly disposes the transport after all PDFs are done.
-function basisCreatePdfTransport({artifacts=BASIS_PDF_ARTIFACTS,
+function basisCreatePdfTransport({artifacts,
   fetchImpl=(...args)=>{if(typeof fetch!=="function")throw Error("PDF verification requires Fetch.");return fetch(...args);},
   digestImpl=bytes=>{if(typeof crypto==="undefined"||!crypto.subtle||typeof crypto.subtle.digest!=="function")throw Error("PDF verification requires Web Crypto SHA-256.");return crypto.subtle.digest("SHA-256",bytes);},
   importModule=url=>import(url),
   createObjectURL=blob=>URL.createObjectURL(blob),revokeObjectURL=url=>URL.revokeObjectURL(url)}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function"),
+    localUrls={reader:"./vendor/pdf-4.10.38.min.mjs",worker:"./vendor/pdf.worker-4.10.38.min.mjs"};
+  if(artifacts===undefined)artifacts=desktop?{"4.10.38":Object.fromEntries(["reader","worker"].map(kind=>
+    [kind,{...BASIS_PDF_ARTIFACTS["4.10.38"][kind],url:localUrls[kind]}]))}:BASIS_PDF_ARTIFACTS;
   for(const adapter of [fetchImpl,digestImpl,importModule,createObjectURL,revokeObjectURL]){
     if(typeof adapter!=="function")throw new TypeError("PDF integrity adapters must be functions.");
   }
@@ -6874,9 +6883,16 @@ function basisCreatePdfTransport({artifacts=BASIS_PDF_ARTIFACTS,
         typeof artifact.sha256!=="string"||!/^[0-9a-f]{64}$/.test(artifact.sha256)){
         throw new TypeError("PDF artifact metadata has an invalid URL, size or SHA-256.");
       }
-      let parsed;try{parsed=new URL(artifact.url);}catch(_){throw new TypeError("PDF artifact URL must be HTTPS.");}
-      if(parsed.protocol!=="https:"||parsed.username||parsed.password||parsed.hash||urls.has(artifact.url)){
-        throw new TypeError("PDF artifact URLs must be distinct HTTPS URLs without credentials or fragments.");
+      if(desktop){
+        const pin=BASIS_PDF_ARTIFACTS["4.10.38"][kind];
+        if(version!=="4.10.38"||artifact.url!==localUrls[kind]||artifact.size!==pin.size||artifact.sha256!==pin.sha256){
+          throw new TypeError("The desktop PDF reader must use its pinned bundled artifacts.");
+        }
+      }else{
+        let parsed;try{parsed=new URL(artifact.url);}catch(_){throw new TypeError("PDF artifact URL must be HTTPS.");}
+        if(parsed.protocol!=="https:"||parsed.username||parsed.password||parsed.hash||urls.has(artifact.url)){
+          throw new TypeError("PDF artifact URLs must be distinct HTTPS URLs without credentials or fragments.");
+        }
       }
       urls.add(artifact.url);snapshot[kind]={url:artifact.url,size:artifact.size,sha256:artifact.sha256};
     }
@@ -7043,14 +7059,16 @@ function basisPdfWait(work,{timeoutMs=30000,signal,label="PDF operation",onStop}
   });
 }
 
-function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates=["4.10.38","4.4.168"]}={}){
+function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function");
+  if(candidates===undefined)candidates=desktop?["4.10.38"]:["4.10.38","4.4.168"];
   if(loadModule!==undefined&&typeof loadModule!=="function")throw new TypeError("PDF module loading must be a function.");
   if(transport!==undefined&&(!transport||typeof transport.load!=="function"))throw new TypeError("PDF transport must provide load().");
   if(transport!==undefined&&loadModule!==undefined)throw new TypeError("Choose either a PDF transport or a trusted injected module loader.");
   if(typeof timeoutMs!=="number"||!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>2147483647){
     throw new TypeError("PDF module timeout must be a positive number no greater than 2147483647 milliseconds.");
   }
-  const approved=new Set(["4.10.38","4.4.168"]);
+  const approved=new Set(desktop?["4.10.38"]:["4.10.38","4.4.168"]);
   if(!Array.isArray(candidates)||!candidates.length||candidates.length>approved.size||
     candidates.some(version=>!approved.has(version))||new Set(candidates).size!==candidates.length){
     throw new TypeError("PDF reader candidates must be distinct approved 4.x versions: 4.10.38 and 4.4.168.");
@@ -7079,13 +7097,15 @@ function basisCreatePdfLoader({loadModule,transport,timeoutMs=10000,candidates=[
     const attempts=[];let last;
     for(const version of versions){
       if(!current(request))return;
-      const base="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+version+"/",workerUrl=base+"pdf.worker.min.mjs",
+      const base="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+version+"/",
+        readerUrl=desktop?"./vendor/pdf-"+version+".min.mjs":base+"pdf.min.mjs",
+        workerUrl=desktop?"./vendor/pdf.worker-"+version+".min.mjs":base+"pdf.worker.min.mjs",
         candidate=new AbortController(),abort=()=>candidate.abort(request.controller.signal.reason);
       request.controller.signal.addEventListener("abort",abort,{once:true});
       if(request.controller.signal.aborted)abort();
       try{
         const work=()=>verifiedTransport?verifiedTransport.load(version,{signal:candidate.signal}):Promise.all([
-          Promise.resolve().then(()=>loadModule(base+"pdf.min.mjs")),
+          Promise.resolve().then(()=>loadModule(readerUrl)),
           Promise.resolve().then(()=>loadModule(workerUrl))
         ]).then(([lib,worker])=>({lib,worker,version,workerUrl,verified:false}));
         const pair=await basisPdfWait(work,{timeoutMs,signal:request.controller.signal,label:"PDF.js "+version+" modules",
@@ -8862,9 +8882,112 @@ function basisCreateAIProvider(options={}){
 }
 /* END BASIS AI PROVIDER */
 
+/* BEGIN BASIS DESKTOP BRIDGE */
+// The browser edition never invokes native commands. Desktop permissions are
+// limited further by the local window capability and the Rust command handlers.
+function basisCreateDesktopBridge(options={}){
+  const host=options.host===undefined?(typeof window!=='undefined'?window:globalThis):options.host;
+  const native=options.invoke||host?.__TAURI__?.core?.invoke;
+  const available=typeof native==='function',credentialMarker='basis-desktop-saved-credential',providers=new Set(['openai','anthropic']);
+  const invoke=(command,args={})=>{if(!available)return Promise.reject(Error('Desktop support is unavailable in this browser.'));return Promise.resolve().then(()=>native(command,args));};
+  const provider=value=>{if(!providers.has(value))throw Error('Choose OpenAI or Anthropic.');return value;};
+  const snapshot=value=>{
+    if(!value||value.schemaVersion!==1||typeof value.revision!=='string'||!value.revision||!value.entries||typeof value.entries!=='object'||Array.isArray(value.entries))throw Error('The desktop workspace is invalid. Restore a backup before continuing.');
+    for(const key of Object.keys(value.entries))if(!/^[A-Za-z0-9_.-]{1,160}$/.test(key))throw Error('The desktop workspace contains an invalid storage key.');
+    return value;
+  };
+  let requestSequence=0;
+  const fetchNative=async(url,request={})=>{
+    const selected=url==='https://api.openai.com/v1/responses'?'openai':url==='https://api.anthropic.com/v1/messages'?'anthropic':null;
+    if(!selected||request.method!=='POST'||typeof request.body!=='string')throw Error('This desktop request is not supported.');
+    const headers=new Headers(request.headers||{}),authorization=headers.get('authorization')||'',key=selected==='openai'?authorization.replace(/^Bearer\s+/i,''):headers.get('x-api-key')||'';
+    if(!key)throw Error('An API key is required.');
+    const requestId='desktop-'+Date.now().toString(36)+'-'+(++requestSequence).toString(36),signal=request.signal;
+    const cancelled=()=>Object.assign(Error('The AI request was cancelled.'),{name:'AbortError'});
+    if(signal?.aborted)throw cancelled();
+    let rejectAbort,stopped=false;
+    const aborted=new Promise((resolve,reject)=>{rejectAbort=reject;});
+    const abort=()=>{if(stopped)return;stopped=true;invoke('desktop_ai_cancel',{requestId}).catch(()=>{});rejectAbort(cancelled());};
+    signal?.addEventListener('abort',abort,{once:true});
+    try{
+      if(signal?.aborted)throw cancelled();
+      const args={provider:selected,body:request.body,requestId};if(key!==credentialMarker)args.apiKey=key;
+      const response=await Promise.race([invoke('desktop_ai_request',args),aborted]);
+      if(signal?.aborted)throw cancelled();
+      if(!response||!Number.isInteger(response.status)||response.status<200||response.status>599||typeof response.body!=='string')throw Error('The desktop AI response was invalid.');
+      return new Response(response.body,{status:response.status,headers:{'content-type':'application/json'}});
+    }finally{stopped=true;signal?.removeEventListener('abort',abort);}
+  };
+  const readSnapshot=async()=>snapshot(await invoke('desktop_store_read'));
+  const commit=async(expectedRevision,puts,deletes=[])=>snapshot(await invoke('desktop_store_commit',{expectedRevision,puts,deletes}));
+  const read=async key=>{const state=await readSnapshot();return Object.prototype.hasOwnProperty.call(state.entries,key)?state.entries[key]:null;};
+  const write=async(key,value)=>{const state=await readSnapshot();await commit(state.revision,{[key]:value});};
+  const remove=async key=>{const state=await readSnapshot();await commit(state.revision,{},[key]);};
+  const saveFile=async(filename,data)=>{
+    let bytes;if(typeof data==='string')bytes=new TextEncoder().encode(data);else if(data instanceof Blob)bytes=new Uint8Array(await data.arrayBuffer());else if(data instanceof ArrayBuffer)bytes=new Uint8Array(data);else if(ArrayBuffer.isView(data))bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);else throw Error('The export contains unsupported file data.');
+    if(bytes.length>64*1024*1024)throw Error('The desktop export exceeds the 64 MiB file limit.');
+    let binary='';for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
+    const status=await invoke('desktop_save_file',{filename,dataBase64:btoa(binary)});
+    if(!['saved','declined'].includes(status))throw Error('The desktop file could not be saved.');return status;
+  };
+  return {available,credentialMarker,readSnapshot,commit,read,write,remove,saveFile,fetch:fetchNative,
+    info:()=>invoke('desktop_store_info'),createBackup:()=>invoke('desktop_backup_create'),openBackupFolder:()=>invoke('desktop_open_backup_folder'),
+    keyStatus:selected=>invoke('desktop_key_status',{provider:provider(selected)}),
+    storeKey:(selected,apiKey)=>invoke('desktop_key_store',{provider:provider(selected),apiKey}),
+    deleteKey:selected=>invoke('desktop_key_delete',{provider:provider(selected)}),
+    listenClose:async callback=>{const current=host?.__TAURI__?.window?.getCurrentWindow?.();if(!available||!current?.onCloseRequested)throw Error('Desktop close protection is unavailable.');return current.onCloseRequested(callback);},
+    close:()=>host.__TAURI__.window.getCurrentWindow().close()};
+}
+const BASIS_DESKTOP=basisCreateDesktopBridge();
+const BASIS_DESKTOP_AI_PREFERENCE='basis.desktop.ai.v1';
+function basisDesktopAIChoice(value){
+  if(!BASIS_DESKTOP.available)return;
+  try{if(value)localStorage.setItem(BASIS_DESKTOP_AI_PREFERENCE,JSON.stringify({provider:value.provider,model:value.model}));else localStorage.removeItem(BASIS_DESKTOP_AI_PREFERENCE);}catch(error){/* A saved key remains available through Use Saved Key. */}
+}
+async function basisDesktopRestoreAI(){
+  if(!BASIS_DESKTOP.available)return;
+  const generation=basisAIGeneration;
+  try{const choice=JSON.parse(localStorage.getItem(BASIS_DESKTOP_AI_PREFERENCE)||'null');
+    if(!choice||!['openai','anthropic'].includes(choice.provider)||typeof choice.model!=='string'||!choice.model||choice.model.length>160)return;
+    if(await BASIS_DESKTOP.keyStatus(choice.provider)&&generation===basisAIGeneration)basisConfigureAI({provider:choice.provider,model:choice.model,apiKey:BASIS_DESKTOP.credentialMarker});
+  }catch(error){/* Manual AI setup remains available if the credential store is locked. */}
+}
+async function basisDesktopInstallCloseGuard(){
+  if(!BASIS_DESKTOP.available)return;
+  let approved=false,busy=false;
+  await BASIS_DESKTOP.listenClose(async event=>{
+    if(approved)return;event.preventDefault();if(busy)return;busy=true;
+    try{
+      await PW.ready;await PW.q;
+      if(PW.cur)await pwSaveCur();await PW.q;
+      if(PW.local?.edited)throw Error('The latest edits have not been saved. Save them or export a backup before closing.');
+      approved=true;await BASIS_DESKTOP.close();
+    }catch(error){approved=false;pwStatus('Not saved');kAlert('Basis stayed open because it could not save: '+(error.message||error));}
+    finally{busy=false;}
+  });
+}
+function basisDesktopSettingsPane(){
+  const status=el('p',{class:'hint',role:'status','aria-live':'polite',text:'Loading desktop storage…'}),paths=el('div',{});
+  let busy=false;
+  const refresh=async()=>{try{const info=await BASIS_DESKTOP.info();paths.replaceChildren(
+    el('p',{class:'hint',text:'Workspace: '+info.dataDirectory}),el('p',{class:'hint',text:'Backups: '+info.backupDirectory}));
+    status.textContent=(info.backups?.length||0)+' local backup'+(info.backups?.length===1?'':'s')+' available.';
+  }catch(error){status.textContent='Could not read desktop storage details: '+(error.message||error);}};
+  const backup=studioBtn('Back Up Workspace Now',async()=>{if(busy)return;busy=true;backup.disabled=true;status.textContent='Saving the workspace and creating a backup…';
+    try{await PW.ready;await PW.q;if(PW.cur)await pwSaveCur();await PW.q;const name=await BASIS_DESKTOP.createBackup();await refresh();status.textContent='Backup created: '+name;}
+    catch(error){status.textContent='Backup failed: '+(error.message||error);}finally{busy=false;backup.disabled=false;}});
+  const open=studioBtn('Open Backup Folder',async()=>{try{await BASIS_DESKTOP.openBackupFolder();}catch(error){status.textContent='Could not open the backup folder: '+(error.message||error);}});
+  const card=el('section',{class:'card','data-desktop-settings':''},[el('h3',{text:'Desktop Storage & Backups'}),el('div',{class:'body'},[
+    el('p',{text:'Models are saved on this computer. Automatic backups retain previous saved workspace versions. Keep a separate .basiscre portfolio export before upgrades.'}),paths,
+    el('div',{class:'bar'},[backup,open]),status,
+    el('p',{class:'hint',text:'Web and desktop libraries are separate. Export a .basiscre portfolio from one edition and import it into the other. Desktop copies do not use the website’s Access login or synchronize automatically.'})])]);
+  refresh();return card;
+}
+/* END BASIS DESKTOP BRIDGE */
+
 const AI={text:"",status:"",err:"",parsed:null,avail:null};
 let _sample="pending";
-const BASIS_AI=basisCreateAIProvider();let basisAIGeneration=0;
+const BASIS_AI=basisCreateAIProvider(typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available?{fetch:BASIS_DESKTOP.fetch}:{});let basisAIGeneration=0;
 function basisAIStatus(){const status=BASIS_AI.status();if(status.provider==='host')status.configured=!!_sample&&_sample!=="pending";return status;}
 function basisConfigureAI(options){
   const status=BASIS_AI.configure(options);basisAIGeneration++;_intLim=null;_sample=status.provider==='host'?"pending":BASIS_AI.capability();AI.avail=status.configured;
@@ -9133,6 +9256,7 @@ function rCSV(rows){return rows.map(row=>row.map(value=>{
    base64 text (that is saved verbatim). A declined prompt is final: no retry, no
    fallback prompt. Outside a published page an ordinary download link does the job. */
 async function offerFile(filename,data){
+  if(typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available){try{return await BASIS_DESKTOP.saveFile(filename,data);}catch(error){kAlert('Could not save the file: '+(error.message||error));return 'failed';}}
   const dl=await getDL();
   if(dl){
     try{ await dl.save({filename,data}); return "saved"; }
@@ -10465,15 +10589,16 @@ function pwIdbOpen(){ return new Promise((res,rej)=>{ if(typeof indexedDB==="und
 const pwTx=(mode,fn)=>new Promise((res,rej)=>{ const t=PWS.idb.transaction("kv",mode), rq=fn(t.objectStore("kv"));
   t.oncomplete=()=>res(rq&&rq.result); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
 const pwPath=k=>"data/users/"+PWS.uid+"/"+k;
-async function pwGet(k,source=PWS){ if(source.kind==="db"){ const s=await source.db.doc("data/users/"+source.uid+"/"+k).get(); return s.exists?(s.data()||null):null; }
+async function pwGet(k,source=PWS){ if(source.kind==="desktop")return BASIS_DESKTOP.read(k);if(source.kind==="db"){ const s=await source.db.doc("data/users/"+source.uid+"/"+k).get(); return s.exists?(s.data()||null):null; }
   if(source.kind==="idb")return new Promise((resolve,reject)=>{const tx=source.idb.transaction("kv","readonly"),rq=tx.objectStore("kv").get(k);tx.oncomplete=()=>resolve(rq.result||null);tx.onerror=()=>reject(tx.error||Error("Could not read storage"));tx.onabort=()=>reject(tx.error||Error("Storage read was aborted"));});return (source.mem||PW.mem).get(k)||null; }
-async function pwSet(k,v){ if(PWS.kind==="db") return PWS.db.doc(pwPath(k)).set(v); if(PWS.kind==="idb") return pwTx("readwrite",st=>st.put(v,k)); PW.mem.set(k,v); }
-async function pwDel(k){ if(PWS.kind==="db") return PWS.db.doc(pwPath(k)).delete(); if(PWS.kind==="idb") return pwTx("readwrite",st=>st.delete(k)); PW.mem.delete(k); }
+async function pwSet(k,v){ if(PWS.kind==="desktop")return BASIS_DESKTOP.write(k,v);if(PWS.kind==="db") return PWS.db.doc(pwPath(k)).set(v); if(PWS.kind==="idb") return pwTx("readwrite",st=>st.put(v,k)); PW.mem.set(k,v); }
+async function pwDel(k){ if(PWS.kind==="desktop")return BASIS_DESKTOP.remove(k);if(PWS.kind==="db") return PWS.db.doc(pwPath(k)).delete(); if(PWS.kind==="idb") return pwTx("readwrite",st=>st.delete(k)); PW.mem.delete(k); }
 async function pwInitStore(){ let db=null, user=null;
+  if(typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available){PWS.kind="desktop";await BASIS_DESKTOP.readSnapshot();return;}
   try{ if(window.claude&&claude.use){ [db,user]=await Promise.all([claude.use("db"),claude.use("user")]); } }catch(e){ db=null; }
   if(db&&user){ try{ const id=await user.id(); if(id){ PWS.db=db; PWS.uid=id; PWS.kind="db"; await pwGet("pw_index"); return; } }catch(e){ PWS.kind="pending"; } }
   try{ PWS.idb=await pwIdbOpen(); PWS.kind="idb"; }catch(e){ PWS.kind="memory"; } }
-const pwWhere=()=>PWS.kind==="db"?"your Basis account (private to you, on every device)":PWS.kind==="idb"?"this browser only":"memory only (this browser blocks storage; export the portfolio to keep it)";
+const pwWhere=()=>PWS.kind==="desktop"?"this computer, with automatic local backups":PWS.kind==="db"?"your Basis account (private to you, on every device)":PWS.kind==="idb"?"this browser only":"memory only (this browser blocks storage; export the portfolio to keep it)";
 const pwB64=u=>{ let s=""; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); };
 const pwUnB64=b=>{ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; };
 const PW_PART=180000;
@@ -10492,7 +10617,13 @@ async function pwCommit(ix,models=[],deleted=[]){ basisValidateWorkspaceIndex(ix
   for(const id of deleted){basisWorkspaceId(id,"property ID");if(deletedIds.has(id)||modelIds.has(id)||next.props.some(p=>p.id===id))throw Error("Invalid or duplicate saved model deletion");deletedIds.add(id);}
   const cleanupKeys=(id,d,old)=>{if(!d)return [];const count=basisValidateWorkspaceHeader(d),owners=new Map();for(const p of old&&old.props||[]){owners.set("pwm_"+p.id,p.id);owners.set(basisWorkspaceModelKey(p.id,p),p.id);}const keys=[];for(let i=1;i<count;i++){const key=pwPartKey(id,d,i),owner=owners.get(key);if(owner!==undefined&&owner!==id)throw Error("Stored model chunk aliases another property");keys.push(key);}return keys;};
   const prepared=[]; for(const m of models) prepared.push(await pwPrepareModel(m.id,m.json,m.saved,PWS.kind==="db"));
-  if(PWS.kind==="memory"){
+  if(PWS.kind==="desktop"){
+    const snapshot=await BASIS_DESKTOP.readSnapshot(),old=snapshot.entries.pw_index||null;if(old)basisValidateWorkspaceIndex(old);if(pwRevision(old)!==expected)throw pwConflict();
+    const puts={},removals=new Set(),remove=(id,keep)=>{const rec=old&&old.props.find(p=>p.id===id),key=basisWorkspaceModelKey(id,rec),header=snapshot.entries[key];for(const chunk of cleanupKeys(id,header,old))removals.add(chunk);if(key!==keep)removals.add(key);};
+    for(const model of prepared){remove(model.id,model.key);for(const [key,value]of model.entries)puts[key]=value;const rec=next.props.find(p=>p.id===model.id);if(rec)delete rec.storageKey;}
+    for(const id of deleted)remove(id,null);puts.pw_index=next;for(const key of Object.keys(puts))removals.delete(key);
+    await BASIS_DESKTOP.commit(snapshot.revision,puts,[...removals]);
+  }else if(PWS.kind==="memory"){
     const old=PW.mem.get("pw_index")||null;if(old)basisValidateWorkspaceIndex(old);if(pwRevision(old)!==expected)throw pwConflict();const staged=new Map(PW.mem);
     const remove=(id,keep)=>{const rec=old&&old.props.find(p=>p.id===id),key=basisWorkspaceModelKey(id,rec),d=staged.get(key);for(const chunk of cleanupKeys(id,d,old))staged.delete(chunk);if(!keep)staged.delete(key);};
     for(const p of prepared){remove(p.id,true);for(const [k,v]of p.entries)staged.set(k,v);const r=next.props.find(r=>r.id===p.id);if(r)delete r.storageKey;}
@@ -10537,6 +10668,10 @@ async function pwGetModel(pid,rec,source=PWS){ const r=rec||pwRec(pid),key=basis
       tx.oncomplete=()=>resolve(stored?{d:stored,s:parts.join("")}:null);tx.onerror=()=>reject(failure||tx.error||Error("Could not read stored model"));tx.onabort=()=>reject(failure||tx.error||Error("Could not read stored model"));
       rq.onsuccess=()=>{try{stored=rq.result;if(stored===undefined||stored===null)return;const count=header(stored);parts[0]=stored.s;length=stored.s.length;for(let i=1;i<count;i++){const part=st.get(pwPartKey(pid,stored,i));part.onsuccess=()=>{try{if(!part.result)throw Error("Stored model is incomplete: "+pid);parts[i]=basisValidateWorkspacePart(part.result);length+=parts[i].length;if(length>BASIS_WORKSPACE_ENCODED_LIMIT)throw Error("Stored model encoded size limit exceeded");}catch(error){fail(error);}};}}catch(error){fail(error);}};
     });if(!result)return null;({d,s}=result);
+  }else if(source.kind==="desktop"){
+    // One native snapshot keeps the header and its chunks in the same commit.
+    const entries=(await BASIS_DESKTOP.readSnapshot()).entries;d=entries[key];if(d===undefined||d===null)return null;const count=header(d);s=d.s;
+    for(let i=1;i<count;i++){const part=entries[pwPartKey(pid,d,i)];if(!part)throw Error("Stored model is incomplete: "+pid);s+=basisValidateWorkspacePart(part);if(s.length>BASIS_WORKSPACE_ENCODED_LIMIT)throw Error("Stored model encoded size limit exceeded");}
   }else if(source.kind==="memory"){
     // Capture the whole generation before yielding: a complete in-memory commit
     // can replace its header and remove the old chunks in the next microtask.
@@ -11091,7 +11226,7 @@ function studioSettingsPane(existing){
   // Reuse the live controls so an unrelated preference update or background
   // redraw does not discard an unapplied provider/model/key or keyboard focus.
   if(existing&&existing.basisRefresh){existing.basisRefresh();return existing;}
-  const prefs=BASIS_PREFS.get(),storage=BASIS_PREFS.status();
+  const prefs=BASIS_PREFS.get(),storage=BASIS_PREFS.status(),desktop=typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available;
   const control=(label,help,input)=>{input.setAttribute('aria-label',label);return field(label,help,input);};
   const theme=el('select',{onchange:e=>studioSetPreference({theme:e.target.value})},[['system','Use System Setting'],['light','Light'],['dark','Dark']].map(([value,text])=>el('option',{value,text})));theme.value=prefs.theme;
   const autosave=el('input',{type:'checkbox',onchange:e=>studioSetPreference({autosave:e.target.checked})});autosave.checked=prefs.autosave;
@@ -11101,7 +11236,7 @@ function studioSettingsPane(existing){
     control('Appearance','Choose Light, Dark, or follow your device.',theme),
     control('Autosave While Editing','Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
     control('Fit Columns to Content','Turn off to use uniform column widths in scrollable tables.',fit),
-    el('p',{class:'hint',text:'These preferences apply in this browser and are separate from your property files.'}),
+    el('p',{class:'hint',text:desktop?'These preferences apply to this desktop installation and are separate from your property files.':'These preferences apply in this browser and are separate from your property files.'}),
     storageMessage])]);
   let status=basisAIStatus(),editingAI=false,setupError='',connectionController=null,connectionGeneration=0;
   const provider=el('select',{'aria-label':'AI Provider'},[['host','Host Integration'],['openai','OpenAI'],['anthropic','Anthropic']].map(([value,text])=>el('option',{value,text})));provider.value=status.provider;
@@ -11121,12 +11256,32 @@ function studioSettingsPane(existing){
     testConnection.disabled=!!connectionController||editingAI||!status.configured||status.provider==='host';cancelConnection.hidden=!connectionController;
     key.placeholder=same&&status.configured&&selected!=='host'?'Key configured for this session':'Paste your API key';
   };
-  const configure=()=>{stopConnection();try{status=basisAIStatus();const options={provider:provider.value,model:model.value.trim()};if(key.value.trim()||provider.value!==status.provider||!status.configured)options.apiKey=key.value.trim();basisConfigureAI(options);key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError=error.message||'AI setup could not be updated.';updateMessage();}};
-  const modelRow=control('AI Model','Use a model available to your API account.',model),keyRow=control('API Key','Kept in memory for this tab; enter it again after reloading.',key);
+  const configure=()=>{stopConnection();try{status=basisAIStatus();const options={provider:provider.value,model:model.value.trim()};if(key.value.trim()||provider.value!==status.provider||!status.configured)options.apiKey=key.value.trim();basisConfigureAI(options);if(desktop&&(options.provider==='host'||options.apiKey!==undefined&&options.apiKey!==BASIS_DESKTOP.credentialMarker))basisDesktopAIChoice(null);key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError=error.message||'AI setup could not be updated.';updateMessage();}};
+  const modelRow=control('AI Model','Use a model available to your API account.',model),keyRow=control('API Key',desktop?'Session only unless you choose Remember Key on This Device.':'Kept in memory for this tab; enter it again after reloading.',key);
   const updateFields=()=>{const host=provider.value==='host';modelRow.hidden=host;keyRow.hidden=host;model.value=provider.value===status.provider?status.model:provider.value==='openai'?'gpt-4.1':provider.value==='anthropic'?'claude-sonnet-4-5':'';key.value='';updateMessage();};
   provider.onchange=()=>{stopConnection();editingAI=true;setupError='';updateFields();};
   model.oninput=key.oninput=()=>{stopConnection();editingAI=true;setupError='';updateMessage();};
-  const clearKey=studioBtn('Clear API Key',()=>{stopConnection();const current=basisAIStatus();basisConfigureAI({provider:current.provider,model:current.model,apiKey:''});key.value='';editingAI=false;setupError='';drawPane();});
+  const clearKey=studioBtn('Clear API Key',async()=>{stopConnection();const current=basisAIStatus();try{if(desktop&&current.provider!=='host'){await BASIS_DESKTOP.deleteKey(current.provider);basisDesktopAIChoice(null);}basisConfigureAI({provider:current.provider,model:current.model,apiKey:''});key.value='';editingAI=false;setupError='';drawPane();}catch(error){setupError='Could not clear the saved API key: '+(error.message||error);updateMessage();}});
+  let credentialBusy=false;
+  const nativeCredential=async(action)=>{if(credentialBusy)return;credentialBusy=true;stopConnection();setupError='';
+    const selected=provider.value,selectedModel=model.value.trim(),enteredKey=key.value.trim();
+    try{
+      if(selected==='host')throw Error('Select OpenAI or Anthropic first.');
+      if(action==='forget'){await BASIS_DESKTOP.deleteKey(selected);basisDesktopAIChoice(null);const current=basisAIStatus();if(current.provider===selected)basisConfigureAI({provider:selected,model:current.model,apiKey:''});}
+      else{
+        if(!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/.test(selectedModel))throw Error('Enter a valid AI model ID.');
+        if(action==='remember'){if(!enteredKey)throw Error('Paste the API key before choosing Remember Key on This Device.');await BASIS_DESKTOP.storeKey(selected,enteredKey);}
+        else if(!await BASIS_DESKTOP.keyStatus(selected))throw Error('No key is saved for this provider. Paste a key and choose Remember Key on This Device.');
+        if(provider.value!==selected||model.value.trim()!==selectedModel||key.value.trim()!==enteredKey)throw Error('Key storage completed. Your AI setup changed; choose Use Saved Key when ready.');
+        basisConfigureAI({provider:selected,model:selectedModel,apiKey:BASIS_DESKTOP.credentialMarker});basisDesktopAIChoice({provider:selected,model:selectedModel});
+      }
+      key.value='';editingAI=false;setupError='';drawPane();connectionResult.textContent=action==='forget'?'Saved key removed from this device.':'Using the key saved in Windows Credential Manager. Use Test AI Connection before extracting.';
+    }catch(error){setupError=error.message||'The saved key could not be updated.';updateMessage();}
+    finally{credentialBusy=false;}
+  };
+  const credentials=desktop?el('div',{'data-desktop-credentials':''},[
+    el('p',{class:'hint',text:'Optional: save your key in Windows Credential Manager. Property files, backups, and support downloads never include the key.'}),
+    el('div',{class:'bar'},[studioBtn('Remember Key on This Device',()=>nativeCredential('remember')),studioBtn('Use Saved Key',()=>nativeCredential('use')),studioBtn('Forget Saved Key',()=>nativeCredential('forget'))])]):null;
   const testConnection=studioBtn('Test AI Connection',async()=>{
     if(editingAI||connectionController||!basisAIStatus().configured||basisAIStatus().provider==='host')return;
     const ctl=new AbortController(),run=++connectionGeneration,generation=basisAIGeneration;connectionController=ctl;
@@ -11139,14 +11294,14 @@ function studioSettingsPane(existing){
   const cancelConnection=studioBtn('Cancel Connection Test',()=>{stopConnection();connectionResult.textContent='Connection test cancelled.';updateMessage();});
   const ai=el('section',{class:'card'},[el('h3',{text:'AI Document Extraction'}),el('div',{class:'body'},[
     el('p',{text:'Read leases, rent rolls, and operating statements, then review suggested inputs before applying them.'}),
-    control('AI Provider','Use your API account or an available host integration.',provider),modelRow,keyRow,message,
+    control('AI Provider','Use your API account or an available host integration.',provider),modelRow,keyRow,message,credentials,
     el('p',{class:'hint',text:'Extract sends selected document text or images and limited property context directly to the selected provider. Your API account pays any usage charges. Saving this setup sends no documents.'}),
     el('div',{class:'bar'},[
       studioBtn('Use AI Setup',configure,true),
       clearKey,testConnection,cancelConnection,
       studioBtn('Open Document Import',studioOpenDocumentImport)]),
     el('p',{class:'hint',text:'Test AI Connection sends a short test message to your configured API provider and may incur a small usage charge. It sends no documents or property data.'}),connectionResult])]);
-  const pane=el('div',{class:'grid2',id:'basisWorkspaceSettings'},[general,ai]);
+  const pane=el('div',{class:'grid2',id:'basisWorkspaceSettings'},[general,ai,...(desktop?[basisDesktopSettingsPane()]:[])]);
   pane.basisRefresh=()=>{
     const current=BASIS_PREFS.get(),saved=BASIS_PREFS.status();theme.value=current.theme;autosave.checked=current.autosave;fit.checked=current.autoFitColumns;
     storageMessage.hidden=!saved.error;storageMessage.textContent=saved.error||'';status=basisAIStatus();
@@ -11690,7 +11845,7 @@ function basisSaveLabel(status=PW.status){
   if(status!=='Saved')return status||'Ready';
   if(PW.local.edited)return 'Unsaved Changes';
   const saved=pwRec(PW.cur)?.saved,time=saved?new Date(saved).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-  const where=PWS.kind==='db'?'Saved to Your Basis Account':PWS.kind==='idb'?'Saved in This Browser':'In Memory Only — Download a Backup';
+  const where=PWS.kind==='desktop'?'Saved on This Computer':PWS.kind==='db'?'Saved to Your Basis Account':PWS.kind==='idb'?'Saved in This Browser':'In Memory Only — Download a Backup';
   return where+(time?' · '+time:'');
 }
 function basisOpenExport(opener=document.activeElement,scope='property'){
@@ -11713,7 +11868,7 @@ function basisOpenExport(opener=document.activeElement,scope='property'){
       if(status==='failed')throw Error('The download did not complete. Try again.');if(status==='saved')dialog.close();
     }catch(e){error.textContent=e.message;error.hidden=false;}finally{busy=false;download.disabled=false;}
   }});
-  dialog.append(el('h2',{text:scope==='portfolio'?'Export Portfolio':'Export '+S.name}),el('p',{text:'Saving keeps edits in '+(PWS.kind==='db'?'your Basis account':PWS.kind==='idb'?'this browser':'this tab’s memory')+'. Download a backup to keep a separate editable copy.'}),
+  dialog.append(el('h2',{text:scope==='portfolio'?'Export Portfolio':'Export '+S.name}),el('p',{text:'Saving keeps edits in '+(PWS.kind==='desktop'?'the workspace on this computer':PWS.kind==='db'?'your Basis account':PWS.kind==='idb'?'this browser':'this tab’s memory')+'. Download a backup to keep a separate editable copy.'}),
     field('Export Type','',purpose),contentRow,error,el('div',{class:'bar'},[el('button',{class:'btn',text:'Close',onclick:()=>{if(!busy)dialog.close();}}),download]));
   dialog.addEventListener('keydown',e=>e.stopPropagation());dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
   dialog.addEventListener('close',()=>{dialog.remove();if(opener?.isConnected)opener.focus();},{once:true});document.body.append(dialog);dialog.showModal();purpose.focus();
@@ -12503,7 +12658,7 @@ function basisIntakeReconciliationView(checks){
 /* END BASIS INTAKE RECONCILIATION */
 
 /* BEGIN BASIS BETA UI */
-const BASIS_BETA_VERSION='0.7.29';
+const BASIS_BETA_VERSION='0.7.30';
 function basisBetaSupportInfo(){
   // Explicit allowlist: never serialize property data, source documents, keys,
   // browser storage, page URLs, provider settings or raw error messages.
@@ -12514,23 +12669,23 @@ function basisBetaSupportInfo(){
 function basisOpenBetaInfo(){
   const existing=document.querySelector('#basisBetaInfo');if(existing){existing.focus();return;}
   const previous=document.activeElement,dialog=el('dialog',{id:'basisBetaInfo','aria-label':'About Basis',style:'width:min(620px,calc(100vw - 32px));max-height:85vh;overflow:auto;padding:20px;background:var(--panel);color:var(--ink);border:1px solid var(--line)'});
-  const body=el('div',{}),status=el('p',{role:'status','aria-live':'polite',class:'hint'});
+  const body=el('div',{}),status=el('p',{role:'status','aria-live':'polite',class:'hint'}),desktop=typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available;
   const topics={
     'About':[
       'Basis Studio '+BASIS_BETA_VERSION+' · Beta Candidate',
       'Pre-release: review assumptions and source documents before relying on modeled results. Automated checks cover defined cases; they do not certify every underwriting structure.',
-      'Save a .basiscre portfolio backup before upgrades. Browser storage belongs to this browser profile and site address. A different site address or browser does not inherit your library.',
+      desktop?'Save a .basiscre portfolio backup before upgrades. The desktop workspace is stored on this computer with automatic local backups. The website has a separate library; transfer portfolios through .basiscre export/import.':'Save a .basiscre portfolio backup before upgrades. Browser storage belongs to this browser profile and site address. A different site address or browser does not inherit your library.',
       'Report problems through the private contact in your beta invitation. Include steps, expected versus actual behavior and a synthetic example. Download Support Info includes only version and basic browser details; it sends nothing automatically.'
     ],
     'Data & Privacy':[
-      'Models and recovery drafts are saved in this browser in the standalone app. Anyone using this browser profile may access them. There is no team editing or cloud synchronization.',
+      desktop?'Models are saved in this computer’s application data directory. Recovery drafts and preferences use this installation’s WebView profile. Anyone using this Windows account may access them. There is no team editing or cloud synchronization.':'Models and recovery drafts are saved in this browser in the standalone app. Anyone using this browser profile may access them. There is no team editing or cloud synchronization.',
       'Document reading is local. Choosing Extract sends selected document text or images, filenames and limited property context to your chosen OpenAI or Anthropic account, or to an available host integration. Review the provider’s terms before sending confidential documents.',
-      'API keys stay in memory for this tab. Your API account pays usage charges. Test AI Connection sends only a small fixed message. Review AI proposals and sources before Apply.',
-      'Optional Excel and PDF libraries load from SheetJS and cdnjs. These services and the host receive connection metadata. Basis adds no analytics or automatic model/error uploads. Cloudflare Pages and Access handle hosting and login; consult your invitation for the operator’s logging and retention settings.',
-      'Clearing site data removes the local library, preferences and recovery drafts. It does not erase downloaded files or information sent to an AI provider. Back up first.'
+      desktop?'API keys are session-only unless you explicitly save one in Windows Credential Manager. Keys are excluded from workspace files and backups. Your API account pays usage charges. Test AI Connection sends only a small fixed message. Review proposals before Apply.':'API keys stay in memory for this tab. Your API account pays usage charges. Test AI Connection sends only a small fixed message. Review AI proposals and sources before Apply.',
+      desktop?'Excel and PDF libraries are included in the desktop installation for offline document reading. AI extraction still connects directly to your selected provider. Basis adds no analytics or automatic model/error uploads. The desktop copy does not use the website’s Access login.':'Optional Excel and PDF libraries load from SheetJS and cdnjs. These services and the host receive connection metadata. Basis adds no analytics or automatic model/error uploads. Cloudflare and Access handle hosting and login; consult your invitation for the operator’s logging and retention settings.',
+      desktop?'Removing the desktop application’s data can remove the workspace, backups, preferences and recovery drafts. Uninstalling does not erase documents sent to AI providers. Export a portfolio backup and forget saved API keys before removing data.':'Clearing site data removes the local library, preferences and recovery drafts. It does not erase downloaded files or information sent to an AI provider. Back up first.'
     ],
     'Limitations':[
-      'The beta stores models locally. Invite-only access must be configured by the host. Access login does not synchronize or isolate models between people sharing one browser profile.',
+      desktop?'The desktop beta stores models locally under your Windows account. It has no built-in team login, multi-user isolation, or cloud synchronization.':'The beta stores models locally. Invite-only access must be configured by the host. Access login does not synchronize or isolate models between people sharing one browser profile.',
       'Excel reports contain calculated values and assumptions; they are not editable model backups or guaranteed third-party report-layout equivalents. Use .basiscre for complete backups.',
       'AI may miss or misinterpret lease terms. A successful connection test or reconciled total does not prove extraction accuracy.',
       'Desktop automated tests do not establish native Windows, Safari/iOS or native Excel compatibility. Follow the release acceptance checklist on your intended device and review representative models independently.',
@@ -12745,6 +12900,10 @@ document.querySelectorAll("#studioDock [data-basis-mode]").forEach(b=>b.addEvent
   S=sampleState();
   PW.localModelLoaded=false;
   recalc(); renderKPI(); drawPane(); pwInit();
+  if(typeof BASIS_DESKTOP!=='undefined'&&BASIS_DESKTOP.available){
+    basisDesktopRestoreAI().then(()=>{if(MODE==='portfolio'&&PWV.sub==='settings')drawPane();});
+    basisDesktopInstallCloseGuard().catch(error=>kAlert('Desktop save protection could not start. Export a backup before closing: '+(error.message||error)));
+  }
   getSample().then(()=>{if(T1==="tools"&&T2==="import"||MODE==="portfolio"&&["settings","import"].includes(PWV.sub))drawPane();});
 })();
 

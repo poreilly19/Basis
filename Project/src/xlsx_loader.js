@@ -6,8 +6,11 @@
 // could later replace. Removing a pending script is best-effort cancellation;
 // it does not guarantee that already downloaded JavaScript will not execute.
 function basisCreateXlsxLoader({getLibrary=()=>globalThis.XLSX,loadScript,timeoutMs=10000,
-  url="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+  url,
   integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"}={}){
+  const desktop=!!(globalThis.__TAURI__&&globalThis.__TAURI__.core&&typeof globalThis.__TAURI__.core.invoke==="function");
+  if(url===undefined)url=desktop?"./vendor/xlsx-0.20.3.min.js":"https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+  if(desktop&&url!=="./vendor/xlsx-0.20.3.min.js")throw new TypeError("The desktop spreadsheet reader must use its bundled library.");
   if(typeof getLibrary!=="function")throw new TypeError("Spreadsheet library lookup must be a function.");
   if(loadScript!==undefined&&typeof loadScript!=="function")throw new TypeError("Spreadsheet script loading must be a function.");
   if(typeof timeoutMs!=="number"||!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>2147483647){
