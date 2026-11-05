@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.request
 from unittest.mock import patch
@@ -44,12 +45,26 @@ class StartBasisTests(unittest.TestCase):
         command=cmd or [sys.executable,str(self.directory/'scripts/start-basis.py'),'--no-browser','--port','0']
         p=subprocess.Popen(command,cwd=self.directory.parent,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
         self.processes.append(p);lines=queue.Queue()
-        reader=threading.Thread(target=lambda:[lines.put(line) for line in p.stdout],daemon=True);self.readers[p]=reader;reader.start()
-        output=[]
-        for _ in range(8):
-            line=lines.get(timeout=8);output.append(line)
+        def read_output():
+            try:
+                for line in p.stdout:lines.put(line)
+            finally:lines.put(None)
+        reader=threading.Thread(target=read_output,daemon=True);self.readers[p]=reader;reader.start()
+        # Native CMD also discovers and starts Python; cold Windows runners can
+        # exceed an eight-second quiet period. Keep one bounded startup budget.
+        output=[];deadline=time.monotonic()+30
+        while (remaining:=deadline-time.monotonic())>0:
+            try:line=lines.get(timeout=min(remaining,0.1))
+            except queue.Empty:
+                if p.poll() is not None and not reader.is_alive():break
+                continue
+            if line is None:break
+            output.append(line)
             if line.startswith('Basis Studio: '):return p,line.split(': ',1)[1].strip()
-        self.fail('Launcher did not print its URL: '+''.join(output))
+        returncode=p.poll()
+        state='still running' if returncode is None else f'exited with code {returncode}'
+        self.fail(f'Launcher did not print its URL within the 30-second startup budget ({state}). '
+                  f'Command: {command!r}\nCaptured stdout/stderr:\n'+(''.join(output) or '<no output>'))
     def get(self,url):
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
         return opener.open(url,timeout=4)

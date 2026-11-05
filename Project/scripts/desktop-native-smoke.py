@@ -67,14 +67,18 @@ def main():
         print('PASS real native save and process restart preserve model edits',flush=True)
         result=asynchronous("""
           const model=blankState();model.years=1;model.startYear=2026;model.startMonth=1;
-          model.gvRate=0;model.clRate=0;model.ops=[];model.nonops=[];model.caps=[];
+          model.gvRate=0;model.clRate=0;
+          model.ops=[{id:'native-fixed-expense',name:'Fixed operating cost',amt:1200,basis:'amt',inflRef:'none',recov:false}];
+          model.nonops=[];model.caps=[];
           model.groundLeases=[];model.tenants=[];
           const before=calc(model),bytes=await basisCreateArchive({kind:'property',model});
           const restored=await basisReadArchive(new Blob([bytes]));
-          return {before:before.noiY1,after:calc(restored.model).noiY1};
+          await recalcInBackground();
+          const worker=await basisRunCalculation('property',restored.model,'desktop-smoke');
+          return {before:before.noiY1,after:calc(restored.model).noiY1,worker:worker.noiY1};
         """)
-        assert result['before']==result['after']==0
-        print('PASS native archive round trip and shared calculation engine',flush=True)
+        assert result['before']==result['after']==result['worker']==-1200
+        print('PASS native archive, real calculation worker and independent expense golden',flush=True)
         assert asynchronous("""
           const lib=await pfXlsxLib(),book=lib.utils.book_new();
           lib.utils.book_append_sheet(book,lib.utils.aoa_to_sheet([['Amount'],[1234567890.12345]]),'Fixture');

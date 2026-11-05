@@ -1,0 +1,4 @@
+# Keep standalone modules, embedded scripts, fixtures and releases byte-identical.
+* -text
+*.cmd whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/third_party/MPL_2_0.txt whitespace=-blank-at-eol

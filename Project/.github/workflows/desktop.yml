@@ -49,14 +49,17 @@ jobs:
           rustup override set 1.99.1
       - name: Restore native build cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: native-cache
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/tauri-driver.exe
             desktop/src-tauri/target
-          key: basis-desktop-windows-v1-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
-          restore-keys: basis-desktop-windows-v1-
+          key: basis-desktop-windows-v2-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            basis-desktop-windows-v2-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}-
+            basis-desktop-windows-v2-
       - name: Install isolated pinned desktop CLI
         run: npm ci --prefix desktop --ignore-scripts
       - name: Restore public document runtime cache
@@ -133,3 +136,13 @@ jobs:
           name: Basis-desktop-failure-logs
           if-no-files-found: ignore
           path: ${{ runner.temp }}/basis-driver*.log
+      - name: Preserve native compilation cache after validation
+        if: always() && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          key: basis-desktop-windows-v2-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}-${{ github.sha }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/tauri-driver.exe
+            desktop/src-tauri/target

@@ -192,7 +192,7 @@ fn provider_url(provider: &str) -> Result<&'static str, String> {
 fn credential(provider: &str) -> Result<keyring::Entry, String> {
     provider_url(provider)?;
     keyring::Entry::new(KEY_SERVICE, provider)
-        .map_err(|_| "Windows Credential Manager is unavailable.")
+        .map_err(|_| "Windows Credential Manager is unavailable.".to_string())
 }
 
 #[cfg(windows)]
@@ -230,7 +230,7 @@ fn desktop_key_store(provider: String, api_key: String) -> Result<(), String> {
     {
         credential(&provider)?
             .set_password(api_key.trim())
-            .map_err(|_| "Could not save the API key in Windows Credential Manager.")
+            .map_err(|_| "Could not save the API key in Windows Credential Manager.".to_string())
     }
     #[cfg(not(windows))]
     {
