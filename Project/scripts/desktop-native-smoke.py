@@ -9,6 +9,7 @@ import base64
 import csv
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -43,8 +44,14 @@ def main():
     session=None
     def start():
         nonlocal session
+        native={'application':str(args.application.resolve())}
+        profile=os.environ.get('WEBVIEW2_USER_DATA_FOLDER')
+        if profile:
+            # EdgeDriver must discover DevToolsActivePort in the same profile
+            # that the WebView runtime receives from its inherited environment.
+            native['webviewOptions']={'userDataFolder':str(Path(profile).resolve())}
         result=request(origin+'/session','POST',{'capabilities':{'alwaysMatch':{
-            'tauri:options':{'application':str(args.application.resolve())}}}})
+            'tauri:options':native}}})
         session=result['sessionId']
         request(f'{origin}/session/{session}/timeouts','POST',{'script':90000})
         deadline=time.monotonic()+45
