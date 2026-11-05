@@ -370,6 +370,16 @@ async fn desktop_ai_request(
     result
 }
 
+fn automation_browser_args(opt_in: Option<&str>) -> Option<&'static str> {
+    if opt_in != Some("1") {
+        return None;
+    }
+    // Wry replaces its default arguments when this builder option is supplied.
+    // Preserve those defaults and expose only a fixed loopback debugging port
+    // when a test owner explicitly opts this process into native automation.
+    Some("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1")
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -416,13 +426,18 @@ fn main() {
                 .iter()
                 .find(|window| window.label == "main")
                 .ok_or("The main desktop window configuration is missing.")?;
+            let automation = std::env::var("BASIS_DESKTOP_AUTOMATION").ok();
             stage("before WebView window build");
-            tauri::WebviewWindowBuilder::from_config(app, config)?
-                .on_navigation(|url| {
+            let mut window =
+                tauri::WebviewWindowBuilder::from_config(app, config)?.on_navigation(|url| {
                     (url.scheme() == "https" && url.host_str() == Some("tauri.localhost"))
                         || (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
-                })
-                .build()?;
+                });
+            if let Some(arguments) = automation_browser_args(automation.as_deref()) {
+                window = window.additional_browser_args(arguments);
+                stage("explicit loopback WebView automation options enabled");
+            }
+            window.build()?;
             stage("after WebView window build");
             Ok(())
         })
@@ -489,5 +504,19 @@ mod tests {
         assert!(requests.register("five").is_err());
         requests.active.remove("one");
         assert!(requests.register("five").is_ok());
+    }
+
+    #[test]
+    fn browser_debugging_requires_explicit_process_opt_in_and_is_loopback_only() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("9223")] {
+            assert_eq!(automation_browser_args(value), None);
+        }
+        let arguments = automation_browser_args(Some("1")).unwrap();
+        assert!(
+            arguments.starts_with("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection")
+        );
+        assert!(arguments.contains("--remote-debugging-port=9222"));
+        assert!(arguments.contains("--remote-debugging-address=127.0.0.1"));
+        assert!(!arguments.contains("0.0.0.0"));
     }
 }

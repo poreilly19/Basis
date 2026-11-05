@@ -150,6 +150,7 @@ def main():
         environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']=(extra+' --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1').strip()
         environment['TAURI_WEBVIEW_AUTOMATION']='true'
         environment['BASIS_DESKTOP_DIAGNOSTICS']='1'
+        environment['BASIS_DESKTOP_AUTOMATION']='1'
         application=subprocess.Popen([str(args.application.resolve())],cwd=str(args.application.resolve().parent),
                                      env=environment,stdout=output_files[0],stderr=output_files[1])
         print(f'Native host launch {launch_number}, PID {application.pid}; diagnostics: {log_dir}',flush=True)
