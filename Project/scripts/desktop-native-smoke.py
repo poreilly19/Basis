@@ -261,7 +261,7 @@ def main():
           try{
             output=await intPdf(bytes.buffer,null,{active:()=>true});
             const worker=task?._worker;
-            return {text:output.pages.map(page=>page.text).join('\n'),pages:output.pages.length,version:library.version,
+            return {text:output.pages.map(page=>page.text).join('\\n'),pages:output.pages.length,version:library.version,
               dedicated:worker?._webWorker instanceof Worker && worker.port===worker._webWorker};
           }finally{intPdfLib=original;if(output)await intPdfCleanup(output.pdf,{active:()=>true});}
         """,[pdf])
