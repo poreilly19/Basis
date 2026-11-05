@@ -104,3 +104,42 @@ test('Native close waits for current save and blocks a failed save',async()=>{
   // New window session: rejected persistence must keep the app open.
   closes=0;env.context.PW.local.edited=1;env.context.pwSaveCur=async()=>{throw Error('Disk full');};await env.run('basisDesktopInstallCloseGuard()');await handler({preventDefault(){}});assert.equal(closes,0);assert.match(alerts[0],/stayed open.*Disk full/);
 });
+test('Native close commits a focused field before capturing the saved model',async()=>{
+  let handler,closes=0,saved=null,model='old';const active={matches:()=>true,checkValidity:()=>true,blur(){model='typed value';}};
+  const env=setup(async()=>{}, {document:{activeElement:active,querySelector:()=>null},PW:{ready:Promise.resolve(),q:Promise.resolve(),cur:'p',local:{edited:0}},pwSaveCur:async()=>{saved=model;},pwStatus(){},kAlert(){throw Error('Unexpected alert');}});
+  env.host.__TAURI__.window={getCurrentWindow:()=>({onCloseRequested:async callback=>{handler=callback;},close:async()=>{closes++;}})};
+  await env.run('basisDesktopInstallCloseGuard()');await handler({preventDefault(){}});assert.equal(saved,'typed value');assert.equal(closes,1);
+});
+test('Native invalid text stays focused and uncommitted without opening modal alerts',async()=>{
+  let handler,closes=0,saves=0,invalid=false,alertOpen=false,alerts=0;
+  const active={matches:()=>true,checkValidity:()=>!invalid,validationMessage:'Invalid amount',value:'1,2',blur(){invalid=true;},focus(){},reportValidity(){}};
+  const env=setup(async()=>{}, {document:{activeElement:active,querySelector:selector=>selector.includes('input:invalid')?(invalid?active:null):(alertOpen?{}:null)},
+    PW:{ready:Promise.resolve(),q:Promise.resolve(),cur:'p',local:{edited:0}},pwSaveCur:async()=>{saves++;},pwStatus(){},kAlert(){alerts++;alertOpen=true;}});
+  env.host.__TAURI__.window={getCurrentWindow:()=>({onCloseRequested:async callback=>{handler=callback;},close:async()=>{closes++;}})};
+  await env.run('basisDesktopInstallCloseGuard()');await handler({preventDefault(){}});await handler({preventDefault(){}});
+  assert.equal(active.value,'1,2');assert.equal(saves,0);assert.equal(closes,0);assert.equal(alerts,0);
+});
+test('Native number badInput is rejected before blur can coerce an empty value',async()=>{
+  let handler,blurred=0,saves=0,closes=0;
+  const active={matches:()=>true,checkValidity:()=>false,validationMessage:'Enter a number',value:'',blur(){blurred++;},focus(){},reportValidity(){}};
+  const env=setup(async()=>{}, {document:{activeElement:active,querySelector:()=>active},PW:{ready:Promise.resolve(),q:Promise.resolve(),cur:'p',local:{edited:0}},pwSaveCur:async()=>{saves++;},pwStatus(){},kAlert(){throw Error('Unexpected modal');}});
+  env.host.__TAURI__.window={getCurrentWindow:()=>({onCloseRequested:async callback=>{handler=callback;},close:async()=>{closes++;}})};
+  await env.run('basisDesktopInstallCloseGuard()');await handler({preventDefault(){}});assert.equal(blurred,0);assert.equal(saves,0);assert.equal(closes,0);
+});
+test('Typing into another field during a slow native save keeps the window open',async()=>{
+  let handler,release,closes=0,saves=0,committed=null;const alerts=[],document={activeElement:null,querySelector:()=>null};
+  const env=setup(async()=>{}, {document,PW:{ready:Promise.resolve(),q:Promise.resolve(),cur:'p',local:{edited:0}},pwSaveCur:async()=>{saves++;await new Promise(resolve=>{release=resolve;});},pwStatus(){},kAlert:message=>alerts.push(message)});
+  env.host.__TAURI__.window={getCurrentWindow:()=>({onCloseRequested:async callback=>{handler=callback;},close:async()=>{closes++;}})};
+  await env.run('basisDesktopInstallCloseGuard()');const pending=handler({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
+  document.activeElement={matches:()=>true,checkValidity:()=>true,blur(){committed='typed during save';env.context.PW.local.edited=1;document.activeElement=null;}};
+  release();await pending;assert.equal(committed,'typed during save');assert.equal(saves,1);assert.equal(closes,0);assert.match(alerts[0],/latest edits have not been saved/);
+});
+test('Native close locks controls during persistence and restores their prior state before errors',async()=>{
+  for(const prior of [false,true]){
+    let handler,rejectSave,closes=0,alerted=false;const body={inert:prior},document={body,activeElement:null,querySelector:()=>null};
+    const env=setup(async()=>{}, {document,PW:{ready:Promise.resolve(),q:Promise.resolve(),cur:'p',local:{edited:0}},pwSaveCur:()=>new Promise((resolve,reject)=>{rejectSave=reject;}),pwStatus(){},kAlert(){assert.equal(body.inert,prior);alerted=true;}});
+    env.host.__TAURI__.window={getCurrentWindow:()=>({onCloseRequested:async callback=>{handler=callback;},close:async()=>{closes++;}})};
+    await env.run('basisDesktopInstallCloseGuard()');const pending=handler({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));assert.equal(body.inert,true);
+    rejectSave(Error('Disk full'));await pending;assert.equal(body.inert,prior);assert.equal(alerted,true);assert.equal(closes,0);
+  }
+});

@@ -8957,12 +8957,37 @@ async function basisDesktopInstallCloseGuard(){
   let approved=false,busy=false;
   await BASIS_DESKTOP.listenClose(async event=>{
     if(approved)return;event.preventDefault();if(busy)return;busy=true;
+    let invalidControl=null,inertBody=null,previousInert=false;
+    const commitActiveControl=()=>{
+      const active=typeof document!=='undefined'?document.activeElement:null;
+      if(active?.matches?.('input,select,textarea,[contenteditable="true"]')){
+        // OS window controls do not reliably move DOM focus. Validate native
+        // inputs before blur can coerce them, then let the existing field's
+        // change/blur handlers commit and validate formatted text.
+        if(typeof active.checkValidity==='function'&&!active.checkValidity()){invalidControl=active;throw Error(active.validationMessage||'Correct the highlighted field before closing.');}
+        active.blur();
+      }
+      const invalid=typeof document!=='undefined'?document.querySelector?.('input:invalid,select:invalid,textarea:invalid,[aria-invalid="true"]'):null;
+      if(invalid){invalidControl=invalid;throw Error(invalid.validationMessage||'Correct the highlighted field before closing.');}
+    };
     try{
+      commitActiveControl();
+      if(typeof document!=='undefined'&&document.body){inertBody=document.body;previousInert=inertBody.inert;inertBody.inert=true;}
       await PW.ready;await PW.q;
       if(PW.cur)await pwSaveCur();await PW.q;
+      // A slow save leaves the window responsive. Commit any newly focused
+      // editor too, then retain the window if those newer edits need saving.
+      commitActiveControl();
       if(PW.local?.edited)throw Error('The latest edits have not been saved. Save them or export a backup before closing.');
       approved=true;await BASIS_DESKTOP.close();
-    }catch(error){approved=false;pwStatus('Not saved');kAlert('Basis stayed open because it could not save: '+(error.message||error));}
+    }catch(error){approved=false;
+      if(inertBody)inertBody.inert=previousInert;
+      if(invalidControl){
+        // Keep invalid raw text focused. A modal would let a deferred input-pane
+        // refresh replace this control before the user can correct it.
+        invalidControl.focus?.({preventScroll:true});invalidControl.reportValidity?.();pwStatus('Not saved: '+(error.message||error));
+      }else{pwStatus('Not saved');if(typeof document==='undefined'||!document.querySelector?.('.kdlg-ov [role="alertdialog"]'))kAlert('Basis stayed open because it could not save: '+(error.message||error));}
+    }
     finally{busy=false;}
   });
 }
@@ -11234,7 +11259,7 @@ function studioSettingsPane(existing){
   const storageMessage=el('p',{class:'note err',role:'status',hidden:!storage.error,text:storage.error||''});
   const general=el('section',{class:'card'},[el('h3',{text:'Workspace Preferences'}),el('div',{class:'body'},[
     control('Appearance','Choose Light, Dark, or follow your device.',theme),
-    control('Autosave While Editing','Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
+    control('Autosave While Editing',desktop?'Save after a short pause while working. Closing Basis also saves the current property when this setting is off. Switching properties and library actions still save; recovery drafts stay enabled.':'Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
     control('Fit Columns to Content','Turn off to use uniform column widths in scrollable tables.',fit),
     el('p',{class:'hint',text:desktop?'These preferences apply to this desktop installation and are separate from your property files.':'These preferences apply in this browser and are separate from your property files.'}),
     storageMessage])]);

@@ -50,6 +50,10 @@ browser database. The model library and index commit together, and a failed save
 must remain visible instead of reporting success. Workspace preferences and local
 draft recovery continue to use the desktop WebView's own storage.
 
+Closing the desktop window commits the focused field and saves the current
+property, including when periodic Autosave is off. Invalid input or a failed save
+keeps the window open for correction or recovery.
+
 Desktop saves retain rolling workspace snapshots. These snapshots are recovery
 copies in the same Windows user profile; they are not an independent off-device
 backup. Keep periodic `.basiscre` portfolio exports somewhere separate, especially

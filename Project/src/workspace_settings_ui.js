@@ -42,7 +42,7 @@ function studioSettingsPane(existing){
   const storageMessage=el('p',{class:'note err',role:'status',hidden:!storage.error,text:storage.error||''});
   const general=el('section',{class:'card'},[el('h3',{text:'Workspace Preferences'}),el('div',{class:'body'},[
     control('Appearance','Choose Light, Dark, or follow your device.',theme),
-    control('Autosave While Editing','Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
+    control('Autosave While Editing',desktop?'Save after a short pause while working. Closing Basis also saves the current property when this setting is off. Switching properties and library actions still save; recovery drafts stay enabled.':'Save after a short pause. Switching properties and explicit library actions still save. Recovery drafts stay enabled.',autosave),
     control('Fit Columns to Content','Turn off to use uniform column widths in scrollable tables.',fit),
     el('p',{class:'hint',text:desktop?'These preferences apply to this desktop installation and are separate from your property files.':'These preferences apply in this browser and are separate from your property files.'}),
     storageMessage])]);

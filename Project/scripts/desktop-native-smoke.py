@@ -66,6 +66,48 @@ def main():
         for stream in output_files:stream.close()
         output_files.clear()
 
+    def capture_startup_health():
+        if os.name!='nt' or application is None:return
+        # Capture the owned native process before failure cleanup. No model
+        # contents, credential values or process environment are inspected.
+        screenshot=str(log_dir/f'basis-startup-health-{launch_number}.png').replace("'","''")
+        script=f"""$nativeHostId={application.pid};
+          $nativeProcesses=@(Get-CimInstance Win32_Process);
+          $nativeOwnedIds=[System.Collections.Generic.HashSet[uint32]]::new();
+          [void]$nativeOwnedIds.Add($nativeHostId);
+          do {{ $nativePreviousCount=$nativeOwnedIds.Count;
+            foreach($nativeProcess in $nativeProcesses){{
+              if($nativeOwnedIds.Contains([uint32]$nativeProcess.ParentProcessId)){{[void]$nativeOwnedIds.Add([uint32]$nativeProcess.ProcessId)}}
+            }}
+          }} while($nativePreviousCount -ne $nativeOwnedIds.Count);
+          $nativeHost=Get-Process -Id $nativeHostId -ErrorAction SilentlyContinue;
+          $nativeScreenshot=$null;$nativeScreenshotError=$null;
+          try {{
+            Add-Type -AssemblyName System.Windows.Forms,System.Drawing;
+            $nativeScreen=[System.Windows.Forms.SystemInformation]::VirtualScreen;
+            $nativeBitmap=[System.Drawing.Bitmap]::new($nativeScreen.Width,$nativeScreen.Height);
+            $nativeGraphics=[System.Drawing.Graphics]::FromImage($nativeBitmap);
+            try {{
+              $nativeGraphics.CopyFromScreen($nativeScreen.Left,$nativeScreen.Top,0,0,$nativeScreen.Size);
+              $nativeBitmap.Save('{screenshot}',[System.Drawing.Imaging.ImageFormat]::Png);
+              $nativeScreenshot='{screenshot}';
+            }} finally {{$nativeGraphics.Dispose();$nativeBitmap.Dispose()}}
+          }} catch {{$nativeScreenshotError=$_.Exception.Message}}
+          [ordered]@{{
+            appPid=$nativeHostId;screenshot=$nativeScreenshot;screenshotError=$nativeScreenshotError;
+            host=@($nativeHost | Select-Object Id,ProcessName,MainWindowTitle,Responding,CPU);
+            processes=@($nativeProcesses | Where-Object {{$nativeOwnedIds.Contains([uint32]$_.ProcessId)}} | Select-Object ProcessId,ParentProcessId,Name,CommandLine);
+            tcp=@(Get-NetTCPConnection -LocalPort 9222 -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,State,OwningProcess)
+          }} | ConvertTo-Json -Depth 6 -Compress"""
+        try:
+            result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],
+                                  capture_output=True,text=True,timeout=15)
+            try:health=json.loads(result.stdout)
+            except (ValueError,TypeError):health={'stdout':result.stdout[-6000:],'stderr':result.stderr[-3000:],'exitCode':result.returncode}
+        except Exception as error:health={'error':str(error)}
+        (log_dir/f'basis-startup-health-{launch_number}.json').write_text(json.dumps(health,indent=2),encoding='utf-8')
+        print('Native startup health: '+json.dumps(health)[:12000],flush=True)
+
     def delete_session():
         nonlocal session
         if session:
@@ -107,6 +149,7 @@ def main():
         extra=environment.get('WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS','').strip()
         environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']=(extra+' --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1').strip()
         environment['TAURI_WEBVIEW_AUTOMATION']='true'
+        environment['BASIS_DESKTOP_DIAGNOSTICS']='1'
         application=subprocess.Popen([str(args.application.resolve())],cwd=str(args.application.resolve().parent),
                                      env=environment,stdout=output_files[0],stderr=output_files[1])
         print(f'Native host launch {launch_number}, PID {application.pid}; diagnostics: {log_dir}',flush=True)
@@ -115,6 +158,7 @@ def main():
         while time.monotonic()<deadline:
             if application.poll() is not None:
                 close_output_files()
+                capture_startup_health()
                 raise RuntimeError(f'The desktop application exited before WebView2 became available (code {application.returncode}).\n{output_tail()}')
             try:
                 version=request(debug_origin+'/json/version',unwrap=False,timeout=2)
@@ -126,7 +170,9 @@ def main():
                 break
             except Exception as error:last_error=str(error)
             time.sleep(.25)
-        else:raise RuntimeError(f'The running native process did not expose its requested loopback WebView2 endpoint: {last_error}\n{output_tail()}')
+        else:
+            capture_startup_health()
+            raise RuntimeError(f'The running native process did not expose its requested loopback WebView2 endpoint: {last_error}\n{output_tail()}')
         result=request(origin+'/session','POST',{'capabilities':{'alwaysMatch':{
             'browserName':'webview2','ms:edgeOptions':{'debuggerAddress':debugger}}}})
         session=result['sessionId']
@@ -158,6 +204,16 @@ def main():
             'args':args or []})
         if not result.get('ok'):raise RuntimeError(result.get('error','Native operation failed'))
         return result.get('value')
+
+    def type_without_blur(selector,text):
+        found=request(f'{origin}/session/{session}/element','POST',{'using':'css selector','value':selector})
+        element=found['element-6066-11e4-a52e-4f735466cecf']
+        request(f'{origin}/session/{session}/element/{element}/click','POST',{})
+        # Element Clear can run unfocusing steps. Ctrl+A and Send Keys preserve
+        # focus so the test reaches the native close with an uncommitted edit.
+        keys='\ue009a\ue000'+text
+        request(f'{origin}/session/{session}/element/{element}/value','POST',{'text':keys,'value':list(keys)})
+        assert run('const input=document.querySelector(arguments[0]);return input===document.activeElement && input.value===arguments[1];',[selector,text])
     try:
         start()
         assert run("return BASIS_DESKTOP.available && PWS.kind==='desktop' && isSecureContext;")
@@ -225,16 +281,23 @@ def main():
         print('PASS Windows Credential Manager store/status/delete without API requests',flush=True)
         closing=asynchronous("""
           S.name='Desktop close-save fixture';DIRTY();
+          await recalcInBackground();await PW.q;
+          setMode('inputs');go('property','desc');
           return {id:PW.cur,info:await BASIS_DESKTOP.info()};
         """)
+        city='Desktop unblurred city fixture'
+        type_without_blur('#pane input[data-field="city"]',city)
+        assert run('return S.city;')!=city
         close_host()
         saved=json.loads((Path(closing['info']['dataDirectory'])/'workspace.json').read_text(encoding='utf-8'))
         entries=saved['entries'];record=next(item for item in entries['pw_index']['props'] if item['id']==closing['id'])
         header=entries[record.get('storageKey','pwm_'+closing['id'])]
         text=header['s']+''.join(entries[f"pwm_{closing['id']}_{header['part']}_{part}"]['s'] for part in range(1,header['n']))
         if header['enc']=='dr64':text=zlib.decompress(base64.b64decode(text),-zlib.MAX_WBITS).decode('utf-8')
-        assert record['name']==json.loads(text)['name']=='Desktop close-save fixture'
-        print('PASS native window close waits for durable model and index save',flush=True)
+        model=json.loads(text)
+        assert record['name']==model['name']=='Desktop close-save fixture'
+        assert model['city']==city
+        print('PASS native window close commits focused input and waits for durable model and index save',flush=True)
         print('PASS all eight installed desktop smoke checks',flush=True)
     finally:
         delete_session()

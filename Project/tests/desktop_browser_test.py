@@ -145,6 +145,51 @@ class DesktopBrowserTests(unittest.TestCase):
         self.assertEqual(self.closes, 1)
         self.assertEqual(self.page.evaluate('pwGetModel(PW.cur).then(row=>JSON.parse(row.json).city)'), 'Unsaved on close')
 
+    def test_native_close_commits_focused_city_without_requiring_a_prior_blur(self):
+        self.page.evaluate("setMode('inputs');go('property','desc')")
+        field=self.page.get_by_label('City', exact=True)
+        field.fill('Typed city survives desktop close')
+        self.assertNotEqual(self.page.evaluate('S.city'),'Typed city survives desktop close')
+        self.page.evaluate('''async()=>{await window.__desktopCloseHandler({preventDefault(){}});}''')
+        self.assertEqual(self.closes,1)
+        self.assertEqual(self.page.evaluate('pwGetModel(PW.cur).then(row=>JSON.parse(row.json).city)'),'Typed city survives desktop close')
+
+    def test_native_close_commits_focused_formatted_area_before_saving(self):
+        self.page.evaluate("setMode('inputs');go('property','desc')")
+        field=self.page.get_by_label('Rentable Area (SF)', exact=True)
+        field.fill('123,456')
+        self.assertNotEqual(self.page.evaluate('rentableSF(S)'),123456)
+        self.page.evaluate('''async()=>{await window.__desktopCloseHandler({preventDefault(){}});}''')
+        self.assertEqual(self.closes,1)
+        self.assertEqual(self.page.evaluate('pwGetModel(PW.cur).then(row=>rentableSF(JSON.parse(row.json)))'),123456)
+
+    def test_native_close_preserves_invalid_focused_area_until_corrected(self):
+        self.page.evaluate("setMode('inputs');go('property','desc')")
+        original=self.page.evaluate('rentableSF(S)')
+        field=self.page.get_by_label('Rentable Area (SF)', exact=True)
+        field.fill('1,2')
+        self.page.evaluate('''()=>{window.invalidAreaElement=document.activeElement;basisPaneRefreshPending=true;}''')
+        self.page.evaluate('''async()=>{await window.__desktopCloseHandler({preventDefault(){}});}''')
+        self.assertEqual(self.closes,0)
+        expect(field).to_have_value('1,2')
+        expect(field).to_have_attribute('aria-invalid','true')
+        self.assertEqual(self.page.evaluate('pwGetModel(PW.cur).then(row=>rentableSF(JSON.parse(row.json)))'),original)
+        expect(field).to_be_focused()
+        self.assertIn('Not saved:',self.page.evaluate('PW.status'))
+        # Let the focusout-triggered deferred refresh run. The same invalid raw
+        # editor must survive rather than being replaced by the saved value.
+        self.page.evaluate('()=>new Promise(resolve=>setTimeout(resolve,0))')
+        self.assertTrue(self.page.evaluate('document.activeElement===window.invalidAreaElement'))
+        expect(field).to_have_value('1,2')
+        self.page.evaluate('''async()=>{await window.__desktopCloseHandler({preventDefault(){}});}''')
+        self.assertEqual(self.closes,0)
+        expect(self.page.get_by_role('alertdialog')).to_have_count(0)
+        expect(field).to_have_value('1,2')
+        field.fill('123456')
+        self.page.evaluate('''async()=>{await window.__desktopCloseHandler({preventDefault(){}});}''')
+        self.assertEqual(self.closes,1)
+        self.assertEqual(self.page.evaluate('pwGetModel(PW.cur).then(row=>rentableSF(JSON.parse(row.json)))'),123456)
+
 
 if __name__ == '__main__':
     unittest.main()

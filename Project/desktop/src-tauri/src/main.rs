@@ -381,12 +381,21 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let diagnostics = std::env::var("BASIS_DESKTOP_DIAGNOSTICS").as_deref() == Ok("1");
+            let stage = |message: &str| {
+                if diagnostics {
+                    eprintln!("[Basis desktop startup] {message}");
+                }
+            };
+            stage("before store initialization");
             let store = app
                 .path()
                 .app_data_dir()
                 .map_err(|_| "Could not locate the desktop data folder.".to_string())
                 .and_then(store::Store::new)
                 .map(Arc::new);
+            stage("after store initialization");
+            stage("before HTTP client initialization");
             let client = reqwest::Client::builder()
                 .https_only(true)
                 .redirect(reqwest::redirect::Policy::none())
@@ -394,6 +403,7 @@ fn main() {
                 .timeout(Duration::from_secs(90))
                 .user_agent("BasisStudioDesktop/0.7.30")
                 .build()?;
+            stage("after HTTP client initialization");
             app.manage(NativeState {
                 store,
                 client,
@@ -406,12 +416,14 @@ fn main() {
                 .iter()
                 .find(|window| window.label == "main")
                 .ok_or("The main desktop window configuration is missing.")?;
+            stage("before WebView window build");
             tauri::WebviewWindowBuilder::from_config(app, config)?
                 .on_navigation(|url| {
                     (url.scheme() == "https" && url.host_str() == Some("tauri.localhost"))
                         || (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
                 })
                 .build()?;
+            stage("after WebView window build");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
