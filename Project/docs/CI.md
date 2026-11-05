@@ -3,7 +3,7 @@
 The [GitHub Actions workflow](../.github/workflows/ci.yml) is configured for
 Node 20/24 on Ubuntu and Windows. Those jobs verify the committed standalone
 build, repeat the build to check byte stability, and run the Node and Python
-runner unit tests. A separate Ubuntu job installs Playwright 1.62.0 and Chromium,
+runner unit tests. A separate Ubuntu job installs Playwright 1.64.1 and Chromium,
 then runs the ordinary browser suite and verified real-runtime tests.
 
 Action references are pinned to exact commits observed from the upstream major
@@ -34,6 +34,30 @@ and completed startup UI on both initial load and reload; exact persisted-model,
 calculation-worker and archive round-trip assertions remain in place. This
 harness-only correction passed the hosted Windows Chromium beta job on commit
 `67f3b1948f56895ad94216df0323306e63789bff` in run `40594198426`.
+
+### Browser harness update, 2026-11-05
+
+The development-only Playwright pin is now 1.64.1, released on 2026-10-22.
+Playwright 1.62.0's Firefox 153 build crashed during `Page.reload` in hosted run
+`42061429424`, before workspace readiness or saved-model assertions ran. The
+same failure reproduced locally in one of ten unchanged save/reload cases;
+Firefox reported a content-process segmentation fault (signal 11). The other
+nine cases passed. The closed-page teardown error followed the initial crash.
+
+An isolated Playwright 1.64.1 installation with Firefox 157 passed the full six
+beta cases and ten repetitions of the same save/reload case against unchanged
+application SHA-256
+`b33bd65d5d3fa9311f1db7817754190905e4798cb4a028aa62cd9ec4d20deb77`.
+Exact saved-model equality, worker calculation agreement, native archive
+round-trip equality, CSP and runtime checks remain unchanged. This is evidence
+for updating the test browser, not proof of the precise upstream crash cause or
+a guarantee that it cannot recur. New-engine Chromium/WebKit and hosted matrix
+results still require their own verification. Historical validation snapshots
+retain the harness versions actually used for those runs.
+
+Only development tooling changes: shipped application files, financial math,
+native code and runtime-library artifact pins are unaffected. There is no
+automatic retry or relaxation of a failing assertion.
 
 ## Local commands
 

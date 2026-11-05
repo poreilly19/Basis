@@ -247,7 +247,7 @@ For browser tests, install the development-only Python Playwright package and
 Chromium, then run:
 
 ```sh
-python3 -m pip install playwright==1.62.0
+python3 -m pip install playwright==1.64.1
 python3 -m playwright install chromium
 npm run test:browser
 ```

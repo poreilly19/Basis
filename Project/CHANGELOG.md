@@ -2,6 +2,7 @@
 
 ## 0.7.30 — 2026-11-05 Windows desktop edition
 
+- Update the development-only Playwright browser harness to 1.64.1 after reproducing a Firefox 153 content-process crash on reload. Its Firefox 157 build passed the unchanged beta suite and ten repeated save/reload checks locally; record the observed evidence without claiming the precise upstream cause is established. Application bytes and runtime-library pins are unchanged.
 - Fix a report-export race: a delayed refresh of the same inputs no longer cancels a fresh export; newer edits and context changes still cancel stale work.
 - Commit the focused field before desktop shutdown, retain malformed input for correction, and prevent edits during the final save so closing cannot discard the last typed value.
 - Add a Windows Tauri desktop edition alongside the maintained web application, using the same interface, calculation engine and native schema-v1 model format. Keep web build/deployment commands and hosted access separate.

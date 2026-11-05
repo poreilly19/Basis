@@ -54,7 +54,7 @@ npm run test:beta -- --cache ../basis-runtime-cache --browser firefox
 npm run test:beta -- --cache ../basis-runtime-cache --browser webkit
 ```
 
-Browser checks require development-only Playwright 1.62.0 and the selected
+Browser checks require development-only Playwright 1.64.1 and the selected
 browsers/system dependencies (`python -m playwright install --with-deps chromium
 firefox webkit`). Runtime checks use separately cached, exact-size/SHA-256-pinned
 public SheetJS and PDF.js bytes. Provider responses are simulated. Nothing in the
