@@ -411,7 +411,7 @@ fn main() {
                 .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(Duration::from_secs(15))
                 .timeout(Duration::from_secs(90))
-                .user_agent("BasisStudioDesktop/0.7.30")
+                .user_agent(concat!("BasisStudioDesktop/", env!("CARGO_PKG_VERSION")))
                 .build()?;
             stage("after HTTP client initialization");
             app.manage(NativeState {

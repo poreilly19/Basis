@@ -302,3 +302,62 @@ regenerated. They do not include the new failing edge cases and therefore do not
 establish universal correctness. The new engine SHA-256 is
 `5b4878931d4e3221c47b2efb90c6063d791d2e93e6b014711a121bc43468d188`.
 Final command evidence is in [the validation snapshot](VALIDATION_0_7_19.md).
+
+## Debt schedule reconciliation, November 2026
+
+The shared engine now records the principal actually applied to the loan balance
+when the coupon is negative, keeps tiny nonzero coupons numerically stable during
+amortization, and records maturities that fall in the reported year after sale.
+Three independent cases in `tests/debt_curve.test.cjs` check these changes.
+
+- A $60,000 interest-only loan at −0.5% credits the borrower $25 per month
+  and has zero monthly principal. The previous principal column showed −$25.
+  For a $199 loan amortizing over two months at −1% per month, the two payments
+  are $98.01 each. Principal is $100 in month one and $99 in month two.
+- A $60,000 two-year loan at either +0.00000000000001% or −0.00000000000001%
+  has a payment of $2,500 to the cent. Previously, cancellation in the annuity
+  denominator could repay the full balance at once or leave the loan outstanding.
+- A $60,000 interest-only loan at 6% with a 2% exit fee and a 14-month term
+  has a $61,200 payoff if sold at month 12. The separate forward-year projection
+  includes two $300 interest payments and a $61,200 balloon in month 14.
+  Previously it projected 12 interest payments and omitted the balloon.
+
+## Resale report reconciliation, November 2026
+
+`tests/report_export.test.cjs` checks the income period and sale proceeds displayed
+by the property resale and valuation reports. Its two-year hold has year-two
+revenue of $13,200 and expenses of $3,000. Year-three revenue is $14,520 and
+expenses are $3,600. At an 8% exit cap, trailing NOI gives a $127,500 gross
+sale price and forward NOI gives $136,500. Adding a $5,000 credit before charging
+2% selling costs and deducting a further $1,000 yields $128,850 or $137,670 in
+net proceeds, respectively. The report now shows the income period and expense
+base used in each calculation and itemizes the charges in its annual sale table.
+
+## Lease revenue and acquisition charges, November 2026
+
+The tests in `tests/financial.test.cjs` and `tests/lease_math.test.cjs` use stated contract terms and independently calculated expected dollars.
+
+| Assumptions | Expected result |
+|---|---|
+| $480,000 in annual retail sales, 15 occupied days in April, 5% above $120,000 and 10% above $240,000 | Sales of $20,000 and tier thresholds of $5,000 and $10,000 generate $1,250 in rent. |
+| Sales at $200/SF, six months at 1,000 SF and six at 2,000 SF, 5% on sales up to $100/SF and 10% above | $300,000 of sales produce a $22,500 year-end payment. |
+| 1,000 SF occupied in January–March and July–December, with sales at $120/SF/year and 10% rent above zero | Nine occupied months earn $9,000. Annual settlement pays in December. Monthly settlement pays $1,000 in each occupied month. |
+| $2,900 monthly contractual rent and a 5% commission for February 29 alone | $100 of base rent earns a $5 commission. |
+| $1,000/month contractual rent and a 5% commission for a full year, with a midyear change in area | The rent stays at $12,000 for the year and the commission is $600. Area changes apply by calendar month. |
+| 75% chance of renewal at 90% of $12/SF, otherwise a new lease at an inflation-adjusted $22/SF | Blended rent is $13.60/SF. |
+| $75,000 purchase and a whole-price fee band starting at $100,000 | Closing charge is $0. The lower bound is inclusive, the upper bound exclusive, and a blank upper bound is open-ended. |
+
+A lease-year percentage rent settlement falls in the month containing the last
+occupied day of that lease year, or the lease expiry for a shorter final term.
+A projection that stops earlier has no payment for the unfinished term. For a
+lease beginning January 16 with flat annual sales of $120,000 and a 10% rate
+over a zero breakpoint, the first $12,000 comes due the following January.
+A further January 16 to April 15 stub in 2027 settles $3,016.13 in April.
+The calculation allocates the modeled monthly sales and breakpoints by occupied
+days across anniversaries. A lease year already in progress at the analysis
+start includes only the modeled portion of that year. It assumes no unpaid
+percentage rent carried in from before the analysis start.
+
+A $1,000 monthly lease with annual increases of 1% for 100 years earns an
+upfront commission of $102,288.83 at 5% of contractual rent. The previous
+calculation stopped increasing the rent after year 80 and produced $99,340.12.

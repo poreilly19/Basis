@@ -1,6 +1,8 @@
-# Basis Studio — web and Windows desktop (v7.30 beta candidate)
+# Basis Studio — web and Windows desktop (v0.7.31 beta candidate)
 
-Version **0.7.30** adds a Windows desktop edition alongside the maintained web
+Version **0.7.31** corrects retail percentage rent, leasing commissions, acquisition charges, and debt schedules. See the [changelog](CHANGELOG.md) for the effects on existing models.
+
+Version **0.7.30** added a Windows desktop edition alongside the maintained web
 application. Both use the same interface, calculation engine and `.basiscre`
 format. Desktop adds native local workspace saving, rolling local backups,
 packaged PDF/Excel readers and optional Windows Credential Manager keys.
@@ -101,14 +103,14 @@ static hosting build. Read the [beta deployment handoff](docs/BETA_DEPLOYMENT_0_
 and [current validation](docs/VALIDATION_0_7_26.md). The static deployment bundle
 does not itself provide login or cloud synchronization.
 
-On Windows, extract the entire ZIP and double-click **Start Basis.cmd** inside
-`Basis_Studio_Codex`. It checks for Python 3.10+, starts the app at
+On Windows, extract the entire GitHub ZIP, open the **Project** folder and
+double-click **Start Basis.cmd**. It checks for Python 3.10+, starts the app at
 **http://127.0.0.1:8765/** and opens your browser. Keep the server window open.
 The launcher finds `app/index.html` relative to itself, so it works independently
-of your terminal's current folder. If Python is missing or another program occupies
-the port, the window explains the next step. Native Windows execution remains to
-be verified; the portable server behavior is tested on Linux and a Windows test
-is included in CI.
+of your terminal's current folder. If the address is busy, the launcher reopens a
+running copy of the same build or reports the occupied port. If Windows denies
+access, check for an existing listener or a Windows port restriction. For other
+startup failures, the launcher displays the operating system's error.
 
 On macOS/Linux, run `python3 scripts/start-basis.py` from the extracted project.
 Node is needed for development checks, not for previewing the app.

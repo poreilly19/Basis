@@ -43,8 +43,19 @@ function basisNewProperty(opener=document.activeElement){
 }
 function basisPropertyBasics(advanced){
   const model=S;
-  const area=basisNumberInput(()=>rentableSF(model),value=>{if(S!==model)return;let measure=S.areas.find(a=>a.basis)||S.areas[0];if(!measure){measure={id:uid(),name:'Rentable',sf:0,basis:true};S.areas.push(measure);}if(num(measure.sf)!==value){measure.sf=value;DIRTY();}},'sf');
-  basisMarkField(area,(S.areas.find(a=>a.basis)||S.areas[0]),'sf');
+  const rentableMeasure=()=>model.areas.find(a=>a.basis)||model.areas[0];
+  const area=basisNumberInput(()=>rentableMeasure()?.sf??'',value=>{
+    if(S!==model)return;
+    const measure=rentableMeasure();
+    if(measure){
+      if(value===basisParseNumber(measure.sf))return;
+      measure.sf=value;
+    }else{
+      model.areas.push({id:uid(),name:'Rentable',sf:value,basis:true});
+    }
+    DIRTY();
+  },'sf');
+  basisMarkField(area,rentableMeasure(),'sf');
   const years=el('input',{type:'number',min:1,max:40,step:1,value:S.years});basisMarkField(years,S,'years');
   years.addEventListener('change',()=>{if(S!==model)return;const value=Number(years.value);if(!Number.isInteger(value)||value<1||value>40){years.setCustomValidity('Enter whole years from 1 to 40.');years.setAttribute('aria-invalid','true');years.reportValidity();return;}years.setCustomValidity('');years.removeAttribute('aria-invalid');S.years=value;DIRTY();});
   const monthText=()=>f0.format(clamp(Math.round(num(S.years))||10,1,40)*12)+' Months'+(num(S.years)>40?' Modeled ('+S.years+' Years Entered)':'');

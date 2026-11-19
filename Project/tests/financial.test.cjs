@@ -246,3 +246,71 @@ test('a portfolio with no investment or proceeds has no IRR', () => {
   close(result.pv, 0, 'empty portfolio value');
   assert.equal(result.irr, null);
 });
+
+test('partial-month retail lease prorates both sales breakpoints for each settlement method', () => {
+  // April 16–30 is 15/30 of a month. $480,000 annual sales become $20,000.
+  // The annual $120,000/$240,000 thresholds become $5,000/$10,000.
+  // Overage is 5% of $5,000 plus 10% of $10,000 = $1,250.
+  for (const settlement of ['monthly', 'leaseyear']) {
+    for (const breakType of ['amt', 'psf', 'natural']) {
+      const model = fixture();
+      Object.assign(model.tenants[0], {start: '2026-04-16', end: '2026-04-30', rent: 6,
+        prOn: true, prSettle: settlement, prSales: 480000, prRate: .05, prBreakType: breakType,
+        prBreak: breakType === 'psf' ? 120 : 120000, prRate2: .1, prBreak2: 240, prBreak2Basis: 'psf'});
+      const result = engine.calc(model);
+      close(result.monthly.pr[3], 1250, `${settlement} ${breakType} April overage`);
+      close(result.ann.pr[0], 1250, 'annual percentage rent');
+    }
+  }
+});
+
+test('lease-year second sales breakpoint follows the area in force during each month', () => {
+  const model = fixture();
+  Object.assign(model.tenants[0], {end: '2026-12', areaSched: [{date: '2026-07', sf: 2000}],
+    prOn: true, prSettle: 'leaseyear', prSales: 200, prSalesBasis: 'psf', prRate: .05,
+    prBreakType: 'amt', prBreak: 0, prRate2: .1, prBreak2: 100, prBreak2Basis: 'psf'});
+  const result = engine.calc(model);
+  // Six months at each area gives 1,500 SF on average. Annual sales are
+  // $300,000 with $150,000 in each tier. First eleven months have no payment.
+  close(result.monthly.pr[11], 22500, 'December settlement');
+  close(result.ann.pr[0], 22500, 'annual overage');
+});
+
+test('whole-band acquisition charges apply only inside a configured price band', () => {
+  const model = fixture();
+  model.ranges = [{id: 'transfer', mode: 'whole', entries: [
+    {from: 100000, to: 200000, rate: .01}, {from: 300000, to: 400000, rate: .02}
+  ]}];
+  model.acqCosts = [{basis: 'range', range: 'transfer'}];
+  for (const [price, charge] of [[75000, 0], [100000, 1000], [200000, 0], [250000, 0], [300000, 6000], [400000, 0]]) {
+    model.price = price;
+    close(engine.calc(model).closing, charge, `whole-band closing cost at ${price}`);
+  }
+  model.ranges[0].entries[1].to = '';
+  close(engine.calc(model).closing, 8000, 'open-ended final band');
+});
+
+test('lease-year percentage rent pays on the actual anniversary, expiry or neither if still accruing', () => {
+  const model = fixture();
+  model.years = 1; // 12-month hold plus 12 forward months through December 2027
+  const tenant = model.tenants[0];
+  Object.assign(tenant, {start:'2026-01-16', end:'2030-01-15', prOn:true, prSettle:'leaseyear',
+    prSales:120000, prGrowthRef:'none', prRate:.10, prBreakType:'amt', prBreak:0});
+  const payments = () => Array.from(engine.calc(model).monthly.pr);
+  // $1,000/month for 12 months. The first full lease year ends on January 15, 2027.
+  let p = payments();
+  close(p[12], 12000, 'full lease year at the first anniversary');
+  close(p.reduce((a,b)=>a+b,0), 12000, 'unfinished second lease year carries no settlement');
+
+  tenant.end = '2027-04-15';
+  p = payments();
+  close(p[12], 12000, 'first lease-year payment before final expiry');
+  close(p[15], 1000 * (16/31 + 2 + 15/30), 'three-month stub paid at expiry');
+  close(p.reduce((a,b)=>a+b,0), p[12] + p[15], 'only two receipts');
+
+  tenant.end = '2029-01-15';
+  model.years = 3;
+  p = payments();
+  for (const month of [12,24,36]) close(p[month], 12000, 'separate anniversary payments');
+  close(p.reduce((a,b)=>a+b,0), 36000, 'total payments across three lease years');
+});

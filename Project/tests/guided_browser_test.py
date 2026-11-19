@@ -48,6 +48,19 @@ class GuidedBrowserTests(unittest.TestCase):
         self.page.get_by_role('button',name='Continue to Rent Roll',exact=True).click()
         expect(self.page.get_by_role('button',name='Upload Lease / Rent Roll')).to_be_visible()
 
+    def test_property_basics_edits_the_recorded_rentable_area(self):
+        self.page.evaluate("""S.areas=[{id:'gross',name:'Gross',sf:2500,basis:false},
+            {id:'rentable',name:'Rentable',sf:0,basis:true}];setMode('inputs');go('property','desc')""")
+        area = self.page.get_by_label('Rentable Area (SF)', exact=True)
+        expect(area).to_have_value('0')
+        area.fill('1,234.5')
+        area.press('Tab')
+        self.assertEqual(self.page.evaluate('S.areas.map(a=>a.sf)'), [2500, 1234.5])
+        area.fill('0')
+        area.press('Tab')
+        expect(area).to_have_value('0')
+        self.assertEqual(self.page.evaluate('S.areas.map(a=>a.sf)'), [2500, 0])
+
     def test_drawer_navigation_commits_valid_edits_and_blocks_invalid_numbers(self):
         self.tenants();self.page.get_by_role('button',name='Edit lease for Alpha',exact=True).click()
         drawer=self.page.locator('.basis-lease-drawer')

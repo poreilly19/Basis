@@ -29,7 +29,7 @@ function basisBuildReportPackage(model,result,context={}){
     ['Portfolio',context.portfolio||''],['Scenario',context.scenario||''],['Generated UTC',context.generatedAt||''],
     ['Currency',currency],['Area Unit',area],['Analysis',month(0)+' to '+month(result.nY*12-1)],
     ['Contents','Calculated values and recorded assumptions. Amounts retain full numeric precision; display formats do not round saved values. Currency and area are model labels; no exchange or area conversion is performed. Non-USD amounts use neutral numeric formatting.'],
-    ['Cash Flow','Analysis years begin in the model’s start month. Expense/outflow lines use negative values. Reference-only expense/capital records are excluded from cash-flow detail and retained in Input Assumptions. Forward NOI used for resale is separate from the hold-period cash flows.'],
+    ['Cash Flow','Analysis years begin in the model’s start month. Expense/outflow lines use negative values. Reference-only expense/capital records are excluded from cash-flow detail and retained in Input Assumptions. Resale uses the model’s selected trailing or forward 12 months of NOI.'],
     ['Tenant Summary','Year 1 modeled lease streams, including probability-weighted options. Property-level actual/budget overrides and vacancy may differ from tenant totals.'],
     ['Use','Review Model Checks, inputs and source documents before relying on results.'],
     ['Interchange','Report workbook only. Use .basiscre for an editable model backup or the separate XL4ADW template workflow for supported input-workbook interchange.']

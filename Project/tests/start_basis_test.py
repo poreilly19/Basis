@@ -1,5 +1,6 @@
 """Portable launcher integration checks; native CMD execution runs only on Windows."""
 import functools
+import errno
 import hashlib
 import http.server
 import importlib.util
@@ -104,6 +105,27 @@ class StartBasisTests(unittest.TestCase):
         self.assertEqual(result.returncode,1);self.assertIn('Extract the complete Basis ZIP',result.stderr)
         result=subprocess.run([sys.executable,str(self.directory/'scripts/start-basis.py'),'--port','70000'],capture_output=True,text=True,timeout=8)
         self.assertNotEqual(result.returncode,0);self.assertIn('between 0 and 65535',result.stderr)
+
+    def test_bind_failures_report_the_os_reason_and_skip_the_reuse_probe(self):
+        for code, port in [(errno.EPERM, 8765), (errno.EADDRNOTAVAIL, 8765), (errno.EADDRINUSE, 0)]:
+            with self.subTest(code=code, port=port):
+                error = OSError(code, 'simulated bind failure')
+                with patch.object(launcher, 'BasisHTTPServer', side_effect=error), patch.object(launcher, 'existing_app') as probe:
+                    with self.assertRaisesRegex(RuntimeError, 'simulated bind failure') as caught:
+                        launcher.launch(self.app, port, browser=False)
+                probe.assert_not_called()
+                self.assertNotIn('is in use', str(caught.exception))
+
+    def test_windows_access_denied_checks_for_an_existing_exclusive_listener(self):
+        error = PermissionError(errno.EACCES, 'simulated Windows access denial')
+        error.winerror = 10013
+        with patch.object(launcher, 'BasisHTTPServer', side_effect=error), patch.object(launcher, 'existing_app') as probe:
+            probe.return_value = True
+            with patch('builtins.print'):
+                self.assertEqual(launcher.launch(self.app, 8765, browser=False), 0)
+            probe.return_value = False
+            with self.assertRaisesRegex(RuntimeError, 'Windows denied access'):
+                launcher.launch(self.app, 8765, browser=False)
     def test_browser_failure_prints_manual_address_instruction(self):
         with patch.object(launcher.webbrowser,'open',return_value=False) as open_browser,patch('builtins.print') as output:
             launcher.open_browser('http://127.0.0.1:8765/',True)

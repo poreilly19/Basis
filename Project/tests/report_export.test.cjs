@@ -126,3 +126,65 @@ test('building reports never mutates model data or exposes source logs',()=>{
 test('oversized Excel text is rejected explicitly instead of silently truncating',()=>{
  const s=model();s.tenants[0].notes='a'.repeat(32768);assert.throws(()=>report(s),/32,767/);
 });
+
+// Use the real on-screen report definitions and their normal calculation result.
+function resaleReports(state) {
+  const reportContext = vm.createContext({});
+  const script = (first, next) => {
+    const start = html.indexOf(first), end = html.indexOf(next, start);
+    assert.ok(start >= 0 && end > start, `Missing report code: ${first}`);
+    vm.runInContext(html.slice(start, end), reportContext);
+  };
+  script('const $=', '/* =========================== PROPERTY FILE');
+  script('const RO={views:', 'function rCFLines(');
+  script('RB.resale=', 'RB.recaudit=');
+  script('RB.resalemx=', 'RB.pv=');
+  script('RB.rot=', 'RB.vrs=');
+  script('RB.yearly=', '// reports that already exist');
+  reportContext.model = state;
+  return structuredClone(vm.runInContext(`(() => {
+    const result = calc(model);
+    return {report: RB.resale(model, result), matrix: RB.resalemx(model, result),
+      returns: RB.rot(model, result), yearly: RB.yearly(model, result)};
+  })()`, reportContext));
+}
+
+for (const trailing of [true, false]) test(`resale reports reconcile the selected ${trailing?'trailing':'forward'} income, costs and proceeds`, () => {
+  const state = model();
+  state.resaleNoi = trailing ? 'trailing' : 'forward';
+  state.tenants[0].step = .10;
+  state.ops[0].amtYears = '2400;3000;3600';
+  state.costSale = .02;
+  state.saleAdj = [{name:'Land credit', dir:'add', basis:'amt', amt:5000}];
+  state.saleDed = [{name:'Closing charge', basis:'amt', amt:1000}];
+  // Annual rents are $12,000, $13,200 and $14,520. The report must source
+  // both revenue and expenses from the same year as the NOI used at sale.
+  const noi = trailing ? [9600, 10200] : [10200, 10920];
+  const incomeType = trailing ? 'Trailing NOI' : 'Forward NOI';
+  const {report, matrix, returns, yearly} = resaleReports(state);
+  const [bridge, schedule] = report.blocks;
+  const inputs = Object.fromEntries(bridge.rows.map(row => row.c));
+  const capYear = trailing ? 2 : 3;
+  close(inputs[`Effective gross revenue, year ${capYear}`], trailing ? 13200 : 14520);
+  close(inputs[`Operating expenses, year ${capYear}`], trailing ? -3000 : -3600);
+  close(inputs[`Net operating income, year ${capYear} (capped)`], noi[1]);
+  close(inputs['Exit cap rate'], .08);
+  assert.equal(matrix.blocks[0].rows.find(row=>row.c[0]==='Period to cap at sale').c[1],
+    trailing ? '12 months before sale' : '12 months after sale');
+  assert.equal(matrix.blocks[1].cols[1].h, incomeType);
+  assert.ok(returns.blocks[0].rows.some(row=>row.c[0]===incomeType+' capped'));
+  assert.ok(yearly.blocks[0].rows.some(row=>row.c[0]===incomeType+' capped'));
+  const headers = schedule.cols.map(col => col.h);
+  for (const [year, row] of schedule.rows.entries()) {
+    const byName = Object.fromEntries(headers.map((heading, i) => [heading, row.c[i]]));
+    const gross = noi[year] / .08, cost = (gross + 5000) * .02;
+    close(byName[incomeType], noi[year]);
+    close(byName['Gross price'], gross);
+    close(byName['Sale adjustments'], 5000);
+    close(byName['Cost of sale'], -cost);
+    close(byName['Sale deductions'], -1000);
+    close(byName['Net proceeds'], gross + 5000 - cost - 1000);
+  }
+  close(inputs['Cost of sale at 2.00%'], -(noi[1] / .08 + 5000) * .02);
+  close(inputs['Net sale proceeds'], (noi[1] / .08 + 5000) * .98 - 1000);
+});

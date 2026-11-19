@@ -1,5 +1,5 @@
 /* BEGIN BASIS BETA UI */
-const BASIS_BETA_VERSION='0.7.30';
+const BASIS_BETA_VERSION='0.7.31';
 function basisBetaSupportInfo(){
   // Explicit allowlist: never serialize property data, source documents, keys,
   // browser storage, page URLs, provider settings or raw error messages.
