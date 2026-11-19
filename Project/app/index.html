@@ -13433,7 +13433,18 @@ document.addEventListener("keydown",e=>{
   function render(){const q=input.value.trim().toLowerCase();let matches=destinations().filter(r=>(r.name+' '+r.group+' '+r.hint).toLowerCase().includes(q)).slice(0,28);results.replaceChildren();active=Math.min(active,Math.max(0,matches.length-1));if(!matches.length){const empty=document.createElement('p');empty.className='basis-palette-empty';empty.textContent='No matching modeling tasks';results.append(empty);return;}matches.forEach((r,i)=>{const b=document.createElement('button');b.type='button';b.className='basis-palette-option';b.setAttribute('role','option');b.setAttribute('aria-selected',String(i===active));const name=document.createElement('span'),category=document.createElement('small');name.textContent=r.name;category.textContent=r.group;b.append(name,category);b.addEventListener('mouseenter',()=>{active=i;mark();});b.addEventListener('click',()=>go(r));results.append(b);});}
   function mark(){[...results.querySelectorAll('button')].forEach((b,i)=>b.setAttribute('aria-selected',String(i===active)));}
   function open(){lastFocus=document.activeElement;input.value='';active=0;render();overlay.showModal();input.focus();}
-  function close(){if(!overlay.open)return;overlay.close();if(lastFocus?.isConnected)lastFocus.focus({preventScroll:true});}
+  function close(){
+    if(!overlay.open)return;
+    overlay.close();
+    // A shortcut opened from the page body has no focusable return target.
+    // Chromium may otherwise dispatch the next shortcut to the closed dialog.
+    if(lastFocus?.isConnected&&lastFocus!==document.body&&!overlay.contains(lastFocus)){
+      lastFocus.focus({preventScroll:true});
+    }
+    if(document.activeElement===document.body||overlay.contains(document.activeElement)){
+      openButton.focus({preventScroll:true});
+    }
+  }
   openButton.addEventListener('click',open);overlay.querySelector('.basis-palette-close').addEventListener('click',close);
   overlay.addEventListener('mousedown',e=>{if(e.target===overlay)close();});input.addEventListener('input',()=>{active=0;render();});
   const jumpShortcut=e=>(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k';
@@ -13443,6 +13454,7 @@ document.addEventListener("keydown",e=>{
     }
   });
   overlay.addEventListener('keydown',e=>{
+    if(!overlay.open)return;
     e.stopPropagation();
     if(e.isComposing)return;
     if(jumpShortcut(e)||e.key==='Escape'){e.preventDefault();close();return;}

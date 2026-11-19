@@ -87,7 +87,9 @@ and non-Chromium browsers have not been exercised in this pass.
 
 Open **Jump to…** with Ctrl/Cmd+K to search modeling tasks and reports. Use the
 arrow keys to choose a result and Enter to open it. Escape returns you to the
-current page. Model editing shortcuts are paused while the search is open.
+current page. Closing search returns focus to the previous control, or to the
+Jump to button if the page had no focused control. Model editing shortcuts
+are paused while the search is open.
 
 **Property Basics → Rentable Area** shows the saved rentable area measure,
 including zero. To change which measure supplies this value, open **Area Measures**.

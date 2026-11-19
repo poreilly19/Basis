@@ -47,6 +47,22 @@ class UINavigationBrowserTests(unittest.TestCase):
         expect(dialog).not_to_be_visible()
         self.assertEqual(self.page.evaluate("[MODE, T1, T2]"), ['inputs', 'expenses', 'op'])
 
+    def test_jump_closes_to_the_keyboard_launcher_when_opened_from_the_page(self):
+        self.page.evaluate("document.activeElement.blur()")
+        self.page.keyboard.press('Control+k')
+        dialog = self.page.get_by_role('dialog', name='Jump to workspace')
+        close = dialog.get_by_role('button', name='Close search')
+        close.focus()
+        # Read focus before the browser's next rendering step. A second shortcut
+        # can arrive while focus still belongs to a just-closed dialog.
+        returned_to_launcher = close.evaluate("""button => {
+            button.click();
+            return document.activeElement === document.querySelector('.basis-command-open');
+        }""")
+        self.assertTrue(returned_to_launcher)
+        self.page.keyboard.press('Control+k')
+        expect(dialog).to_be_visible()
+
     def test_file_actions_keep_keyboard_focus_during_refresh(self):
         self.page.evaluate("setMode('portfolio')")
         harness.open_library_actions(self.page)
