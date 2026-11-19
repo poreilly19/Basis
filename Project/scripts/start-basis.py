@@ -1,5 +1,6 @@
 """Start the local app from any working directory using only Python's standard library."""
 import argparse
+import errno
 import functools
 import hashlib
 import http.server
@@ -88,11 +89,22 @@ def launch(directory=APP, port=DEFAULT_PORT, browser=True):
     try:
         server = BasisHTTPServer((HOST, port), handler)
     except OSError as error:
+        # An existing exclusive listener can also produce WSAEACCES on Windows.
+        winerror = getattr(error, 'winerror', None)
+        address_in_use = error.errno == errno.EADDRINUSE or winerror == 10048
+        windows_access_denied = winerror == 10013
+        if port == 0 or not (address_in_use or windows_access_denied):
+            requested_port = f'port {port}' if port else 'an automatic port'
+            raise RuntimeError(f'Could not start the local server on {HOST} ({requested_port}). {error}') from error
         if existing_app(port, identity):
             url = f'http://{HOST}:{port}/'
             print(f'Basis is already running at {url}', flush=True)
             open_browser(url, browser)
             return 0
+        if windows_access_denied:
+            raise RuntimeError(f'Port {port} is in use or Windows denied access to it. '
+                               f'Check for another local server or a Windows port restriction. {error}. '
+                               'The address has not changed, so your browser-saved models stay at the same address.') from error
         raise RuntimeError(f'Port {port} is in use. Close the previous Basis server window or the program using that port, then start again. '
                            'The address has not changed, so your browser-saved models stay at the same address.') from error
     server.daemon_threads = True

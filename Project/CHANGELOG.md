@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.31 — Underwriting corrections (beta candidate)
+
+- Correct percentage commissions on partial lease months and free-rent periods, including option terms extending past the hold. Preserve fixed-dollar rent through expansions and contractions and use the passing rent for renewals priced as a percentage of the prior rent.
+- Prorate retail sales breakpoints for occupied time and apply per-SF tiers using the leased area in each month. Book lease-year percentage rent at the anniversary or final expiry. Apply whole-band closing fees only to purchase prices within a configured band.
+- Reconcile principal, interest and payoff in negative-rate, near-zero-rate and forward-year debt schedules.
+- Show the selected trailing or forward income period in the resale report and distinguish selling costs from separate adjustments and deductions.
+- Show recorded zero area in Property Basics, keep keyboard shortcuts within the Jump To dialog, and explain the cause when the local preview server cannot start.
+
+Recalculate models using these assumptions to see the changes to cash flow and valuation. The [financial validation notes](docs/FINANCIAL_VALIDATION.md) give worked examples.
+
 ## 0.7.30 — 2026-11-05 Windows desktop edition
 
 - Update the development-only Playwright browser harness to 1.64.1 after reproducing a Firefox 153 content-process crash on reload. Its Firefox 157 build passed the unchanged beta suite and ten repeated save/reload checks locally; record the observed evidence without claiming the precise upstream cause is established. Application bytes and runtime-library pins are unchanged.

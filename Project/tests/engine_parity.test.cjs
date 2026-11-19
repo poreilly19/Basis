@@ -161,6 +161,13 @@ if (process.argv[2] === '--capture-original') {
     const value = evaluate(load(source), item);
     assert.equal(sha(canonical(value.input)), fixture.cases[item.name].inputSha256, 'Shared input changed');
     const correction=corrections.cases[item.name];
+    if (item.name === 'base-year-fixture') {
+      // The fixture has a zero exit cap. Only its zero-reversion diagnostic copy changed.
+      const issue = value.output.diagnostics.find(entry => entry.msg === 'Reversion is zero');
+      assert.ok(issue);
+      assert.equal(issue.detail, 'Review the NOI period, exit cap, selling costs, adjustments and deductions used to calculate net sale proceeds.');
+      issue.detail = 'The exit cap is applied to a forward NOI of zero, so the DCF carries no terminal value at all.';
+    }
     if (!correction) assert.equal(sha(canonical(value.output)), fixture.cases[item.name].outputSha256, 'Full result graph changed');
     else {
       const {capital,originalPositions}=correction, positions=value.output.positions;

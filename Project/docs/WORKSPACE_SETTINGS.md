@@ -85,9 +85,13 @@ and non-Chromium browsers have not been exercised in this pass.
 
 ## Navigation and portfolio boundaries
 
-The duplicate numbered shortcut row is removed. **Jump to…** and Ctrl/Cmd+K
-remain available. Navigation uses Title Case, and occasional save/reload/recovery
-actions are under **Portfolio → File**.
+Open **Jump to…** with Ctrl/Cmd+K to search modeling tasks and reports. Use the
+arrow keys to choose a result and Enter to open it. Escape returns you to the
+current page. Model editing shortcuts are paused while the search is open.
+
+**Property Basics → Rentable Area** shows the saved rentable area measure,
+including zero. To change which measure supplies this value, open **Area Measures**.
+Save, reload and recovery actions are under **Portfolio → File**.
 
 Portfolio presents a left Navigator, the Home/View/Reports ribbon and a property
 grid with clickable names. The blue footer reports the save state. Failed writes and library conflicts show an error

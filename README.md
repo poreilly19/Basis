@@ -2,7 +2,7 @@
 
 Basis Studio is a web application with a Windows desktop edition for commercial
 real-estate cash flow, valuation, portfolio scenarios, rent rolls and reviewed
-document extraction. The current version is **0.7.30, a beta candidate**.
+document extraction. The **0.7.31** source includes corrections to lease cash flows, closing costs and debt schedules. See the [changelog](Project/CHANGELOG.md) for affected models.
 
 The complete application and its development files are in [`Project/`](Project/).
 This update replaces the earlier v7.9 encoded upload with directly usable files.

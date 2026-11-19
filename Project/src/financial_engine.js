@@ -140,7 +140,7 @@ function resolveMLA(m,S){
     mktRenew:(m.renewBasis==="same"||!m.renewBasis)?(mrN?num(mrN.amt):num(m.mrNewLocal))
             :(m.renewBasis==="prior")?null            // resolved from the expiring rate
             :(mrR?num(mrR.amt):num(m.mrRenewLocal)),
-    renewBasis:m.renewBasis||"same", pctPrior:num(m.pctPrior)||1,
+    renewBasis:m.renewBasis||"same", pctPrior:m.pctPrior==null||m.pctPrior===""?1:num(m.pctPrior),
     growth:  gN,
     growthRef: (mrN&&mrN.inflRef)||(m.mrInflRef)||"mkt",
     tiInflRef: (ti&&ti.inflRef)||(m.tiInflRef)||"lcst",
@@ -211,6 +211,7 @@ const serMo=sr=>Math.floor(sr/10000)*12+(Math.floor(sr/100)%100);
 function resolveSched(rows,leaseStart,sf,baseAmt,baseBasis,step,leaseEnd,inflAbs,mktFn,gearFn){
   const F=inflAbs||1;
   const absVal=(u,amt,ser)=>{
+    u=RENT_ALIAS[u]||u;
     if(u==="psfyr")  return amt*F*sf/12;
     if(u==="psfmo")  return amt*F*sf;
     if(u==="moamt")  return amt*F;
@@ -230,7 +231,9 @@ function resolveSched(rows,leaseStart,sf,baseAmt,baseBasis,step,leaseEnd,inflAbs
   const base0=absVal(baseBasis||"psfyr",baseAmt,leaseStart)||0;
   if(!raw.length){                                // no schedule: flat rate + annual step
     const out=[];
-    for(let y=0;y<80;y++){
+    // The validated lease term can span up to 1,200 months.
+    const years=leaseEnd?clamp(Math.floor((serMo(leaseEnd)-serMo(leaseStart))/12)+1,1,101):80;
+    for(let y=0;y<years;y++){
       const sr=addMo(leaseStart,y*12);
       if(leaseEnd&&sr>leaseEnd&&y>0) break;
       out.push({ser:sr,monthly:base0*Math.pow(1+num(step),y),
@@ -309,6 +312,21 @@ function walkLease(S,nM,startS,endS,sf,resolved,freeMo,cpi,wins){
     rent[i]=o>0?acc/o:0; cpiAdj[i]=o>0?accCpi/o:0; occ[i]=o; abate[i]=ab; recAb[i]=abR;
   }
   return {rent,cpiAdj,occ,abate,recAb};
+}
+
+// Charge rent-roll and option percentage commissions on the complete contractual
+// base rent stream, including projected months beyond the property hold.
+function wholeTermBaseRent(startS,endS,sf,rates,windows){
+  const startYear=Math.floor(startS/10000), startMonth=Math.floor(startS/100)%100;
+  const months=serMo(endS)-serMo(startS)+1;
+  // A 1,200-month term starting midmonth touches 1,201 calendar months.
+  if(months>1201) throw Error("Lease term exceeds the supported 1200-month calculation limit");
+  return walkLease({startYear,startMonth},Math.max(0,months),startS,endS,sf,rates,0,null,windows);
+}
+function commissionableRent(walk,netOfFree,first=0,last=walk.rent.length-1){
+  let total=0;
+  for(let i=Math.max(0,first);i<=Math.min(last,walk.rent.length-1);i++) total+=walk.rent[i]*walk.occ[i]-(netOfFree?walk.abate[i]:0);
+  return total;
 }
 
 /* ---------- lease date helpers ---------- */
@@ -456,43 +474,53 @@ function calc(S){
      given back before it vacate. Everything linear in area is exact by construction. */
   const areaLayers=t=>{
     const eS=eSer(leaseEnd(t)), sS=sSer(t.start); if(eS===null||sS===null) return [{t,a:-Infinity,b:Infinity,label:""}];
-    const pts=[{d:sS,a:num(t.sf)}].concat((t.areaSched||[]).map(x=>({d:sSer(x.date),a:Math.max(0,num(x.sf))})).filter(x=>x.d!==null&&x.d>sS&&x.d<=eS)).sort((p,q)=>p.d-q.d);
+    const changes=(t.areaSched||[]).map(x=>({d:sSer(x.date),a:Math.max(0,num(x.sf))}))
+      .filter(x=>x.d!==null&&x.d>sS&&x.d<=eS).sort((p,q)=>p.d-q.d);
+    // The band mask changes SF by calendar month. Use that same instant to
+    // allocate rent, even if an imported area change includes a midmonth day.
+    const effectiveAreas=new Map([[sS,num(t.sf)]]);
+    for(const change of changes){
+      const monthStart=change.d-change.d%100+1;
+      effectiveAreas.set(Math.max(sS,monthStart),change.a);
+    }
+    const pts=Array.from(effectiveAreas,([d,a])=>({d,a}));
     const segs=pts.map(p=>({s:serToIdx(p.d,S),a:p.a})); segs.forEach((g,k)=>{ g.e=k<segs.length-1?segs[k+1].s-1:Infinity; });
-    const lv=[...new Set(segs.map(g=>g.a))].filter(a=>a>0).sort((a,b)=>a-b), out=[], base=num(t.sf)||1; let prev=0;
-    // area in force on a date, and the rent steps the whole lease takes (with the amount carried to each change of area)
-    const areaAt=d=>{ let a=pts[0].a; for(const p of pts) if(p.d<=d) a=p.a; return a; };
-    const amtRows=(t.sched||[]).filter(r=>r&&r.mode==="date"&&/amt$/.test(r.basis||"")&&sSer(r.date)!==null);
-    const steps=amtRows.slice(); for(const p of pts.slice(1)){ if(steps.some(r=>sSer(r.date)===p.d)) continue;
-      let last=null; for(const r of amtRows) if(sSer(r.date)<=p.d&&(!last||sSer(r.date)>=sSer(last.date))) last=r;
-      if(last) steps.push(Object.assign({},last,{id:(last.id||"r")+"@"+p.d,date:new Date(p.d).toISOString().slice(0,10)})); }
+    const lv=[...new Set(segs.map(g=>g.a))].filter(a=>a>0).sort((a,b)=>a-b), out=[], base=pts[0].a||1; let prev=0;
+    // For whole-premises dollar schedules, calculate the lease at each active
+    // area once. Each band receives its share of the already resolved rate.
+    const dollarRows=(t.sched||[]).some(row=>{
+      const unit=row.units||row.basis;
+      return ["yramt","moamt"].includes(RENT_ALIAS[unit]||unit)||row.minUp==="amtyr"||row.maxUp==="amtyr";
+    });
+    const wholeLeaseRent=["yramt","moamt"].includes(RENT_ALIAS[t.rentBasis]||t.rentBasis);
+    const premises=wholeLeaseRent||dollarRows?{tenant:t,points:pts,rates:new Map()}:null;
     for(const L of lv){ const band=L-prev; let run=null;
       const flush=roll=>{ const tt=Object.assign({},t,{sf:band,areaSched:[],expiry:roll?t.expiry:"Vacate"});
-        // lump sums and a flat dollar rent belong to the premises at commencement; a later expansion band carries none
+        // Lump-sum costs are allocated once to the area held at commencement.
         const sh=run.k0>0?0:band/base;
         if(t.tiBasis==="amt") tt.tiAmt=num(t.tiAmt)*sh; if(t.lcBasis==="amt") tt.lcAmt=num(t.lcAmt)*sh; if(t.incBasis==="amt") tt.incAmt=num(t.incAmt)*sh;
-        if(/amt$/.test(RENT_ALIAS[t.rentBasis]||t.rentBasis||"")) tt.rent=num(t.rent)*sh;
-        // a schedule stated in dollars for the whole lease is shared by area among the bands in force on each step's date
-        if(steps.length) tt.sched=(t.sched||[]).filter(r=>!amtRows.includes(r)).concat(steps.map(r=>{ const d=sSer(r.date), A=areaAt(Math.max(d,pts[0].d));
-          return Object.assign({},r,{amt:A>=L?num(r.amt)*band/A:0}); }));
         if(out.length){ tt.prOn=false; }
-        out.push({t:tt,a:run.k0>0?run.s:-Infinity,b:roll?Infinity:run.e,late:run.k0>0,label:out.length?" (area band "+Math.round(band).toLocaleString()+" SF)":""}); run=null; };
+        out.push({t:tt,premises,a:run.k0>0?run.s:-Infinity,b:roll?Infinity:run.e,late:run.k0>0,label:out.length?" (area band "+Math.round(band).toLocaleString()+" SF)":""}); run=null; };
       segs.forEach((g,k)=>{ if(g.a>=L){ if(!run) run={s:g.s,k0:k}; run.e=g.e; } else if(run) flush(false); });
       if(run) flush(true);
       prev=L; }
-    return out.length?out:[{t,a:-Infinity,b:Infinity,label:""}];
+    return out;
   };
   const bandsOf=tt=>{
     if(!(tt.areaSched||[]).some(a=>a&&a.date)){ const sp=buildSpace(tt); return sp?[{sp,a:-Infinity,b:Infinity}]:[]; }
-    const out=[]; for(const L of areaLayers(tt)){ const sp=buildSpace(L.t); if(!sp) continue; maskSpace(sp,L.a,L.b); sp.bandLate=!!L.late;
-      if(L.label) sp.name=(sp.name||tt.name||"")+L.label; out.push({sp,a:L.a,b:L.b}); }
+    const out=[]; for(const L of areaLayers(tt)){ const sp=buildSpace(L.t,L); if(!sp) continue; maskSpace(sp,L.a,L.b); sp.bandLate=!!L.late;
+      // An upfront commission pays for the whole lease, including a future expansion.
+      if(L.commission)payInto(S,sp.lc,L.commission.month,L.commission.amount,L.t.lcTiming);
+      if(L.label) sp.name=(sp.name||tt.name||"")+L.label; out.push({sp,a:L.a,b:L.b,contractEnd:L.contractEnd}); }
     if(out.length>1&&prCatsOf(tt).length){          // percentage rent on the lease as a whole
       const b0=out[0].sp, tot=new Float64Array(nM), area=new Float64Array(nM);
       for(const B of out) for(let i=0;i<nM;i++){ tot[i]+=B.sp.rent[i]; if(i>=B.a&&i<=B.b) area[i]+=B.sp.sf; }
-      prFill(S,tt,b0.pr,tot,b0.occ,i=>area[i],b0.prLastK,nM); }
+      prFill(S,tt,b0.pr,tot,b0.occ,i=>area[i],b0.prLastK,nM,out[0].contractEnd); }
     return out; };
   const maskSpace=(sp,a,b)=>{ for(let i=0;i<nM;i++){ if(i>=a&&i<=b) continue;
     sp.rent[i]=0; sp.cpiAdj[i]=0; sp.occ[i]=0; sp.abate[i]=0; sp.ti[i]=0; sp.lc[i]=0; if(sp.pr) sp.pr[i]=0; if(sp.inc) sp.inc[i]=0; if(sp.sl) sp.sl[i]=0; } };
-  const buildSpace=(t)=>{
+  const buildSpace=(t,band)=>{
+    const premises=band?.premises;
     const tsf=Math.max(num(t.sf),0); if(!tsf) return null;
     const tEnd=leaseEnd(t);
     const rawMla=byId(S.mlas,t.mla)||S.mlas[0]; if(!rawMla) return null;
@@ -516,11 +544,30 @@ function calc(S){
     let lastPSF=null;
     if(hasLease){
       const mRent=(t.rentBasis==="mkt");
-      const res=resolveSched(t.sched,startS,tsf,mRent?mktAt(startS)*(t.rentPct===undefined||t.rentPct===""?1:num(t.rentPct)):num(t.rent),
-                             mRent?"psfyr":(RENT_ALIAS[t.rentBasis]||t.rentBasis||"psfyr"),
-                             num(t.step),endS,1,mktAt,null);
+      const rentBasis=mRent?"psfyr":(RENT_ALIAS[t.rentBasis]||t.rentBasis||"psfyr");
+      const resolve=(area,lease)=>resolveSched(t.sched,startS,area,
+        mRent?mktAt(startS)*(t.rentPct===undefined||t.rentPct===""?1:num(t.rentPct)):num(lease.rent),
+        rentBasis,num(t.step),endS,1,mktAt,null);
+      let res;
+      if(premises){
+        // A change in area reapportions the passing dollar rent. Replaying
+        // an increment, percentage step or review here would change it twice.
+        res=[];
+        for(let k=0;k<premises.points.length;k++){
+          const {d,a}=premises.points[k], next=premises.points[k+1]?.d??Infinity;
+          if(!a||d===next) continue;
+          if(!premises.rates.has(a)) premises.rates.set(a,resolve(a,premises.tenant));
+          const rows=premises.rates.get(a), share=tsf/a;
+          const append=(row,date)=>res.push({ser:date,monthly:row.monthly*share,base:row.base*share,step:row.step*share});
+          let i=0;
+          while(i+1<rows.length&&rows[i+1].ser<=d)i++;
+          append(rows[i],d);
+          for(i++;i<rows.length&&rows[i].ser<next;i++)append(rows[i],rows[i].ser);
+        }
+      }else res=resolve(tsf,t);
       const fMo=(t.freeBasis==="market")?Math.max(M.frNew,0):Math.max(num(t.free),0);
-      const W=walkLease(S,nM,startS,endS,tsf,res,fMo,cpi,freeWins(t,startS,fMo));
+      const windows=freeWins(t,startS,fMo);
+      const W=walkLease(S,nM,startS,endS,tsf,res,fMo,cpi,windows);
       const by=recoveryBaseYear(S,t.baseYear,t.start);
       for(let i=0;i<nM;i++){
         if(W.occ[i]<=0) continue;
@@ -529,10 +576,11 @@ function calc(S){
         sp.recId[i]=t.rec; sp.baseY[i]=by;
       }
       sp.schedule=res; sp.inPlaceEnd=e;
+      const fullTerm=wholeTermBaseRent(startS,endS,tsf,res,windows);
       // straight-line rent (memo): the same walk over the lease's whole term, from its own start,
       // so the rent and free rent are exactly those charged; spread evenly over occupied months
       { const sy=Math.floor(startS/10000), sm=Math.floor(startS/100)%100, nT=(Math.floor(endS/10000)-sy)*12+(Math.floor(endS/100)%100-sm)+1;
-        if(nT>0&&nT<=1200){ const W2=walkLease(Object.assign({},S,{startYear:sy,startMonth:sm}),nT,startS,endS,tsf,res,fMo,null,freeWins(t,startS,fMo));
+        if(nT>0&&nT<=1201){ const W2=fullTerm;
           // Acquisition-date policy variant: from acquisition, and only to the earliest break;
           // months outside that window are recognised at cash, so they carry no adjustment
           let k0=0, k1=nT-1;
@@ -551,17 +599,18 @@ function calc(S){
       }
       const months=(Math.floor(endS/10000)*12+Math.floor(endS/100)%100)
                   -(Math.floor(startS/10000)*12+Math.floor(startS/100)%100)+1;
-      lastPSF=(res.length?res[res.length-1].monthly:num(t.rent)*tsf/12)*cpiFactor(cpi,Math.max(months-1,0))*12/tsf;
+      const finalRate=res.filter(row=>row.ser<=endS).at(-1);
+      lastPSF=(finalRate?finalRate.monthly:0)*cpiFactor(cpi,Math.max(months-1,0))*12/tsf;
       /* Rent-roll TI and LC, paid at commencement by default. A lease that commenced
          before the analysis carries none unless a payment month is given: per the
          training, in-place costs are normally the seller's. */
-      let termRent=0;
-      for(let q=0;q<months;q++){ const at=addMo(startS,q); let mm=res[0]?res[0].monthly:0;
-        for(const rr of res){ if(rr.ser<=at) mm=rr.monthly; else break; } termRent+=mm; }
       const payAt=(dt)=>{ const k=dt?mIdx(dt,S):mIdx(t.start,S); return (k!==null&&k>=0&&k<nM)?k:null; };
       const kTI=payAt(t.tiDate), kLC=payAt(t.lcDate);
       const infAt=k=>M.tiInflRef?SF_(M.tiInflRef,k):(M.growthRef?SF_(M.growthRef,k):Math.pow(1+M.growth,infY(S,k)));
       const tiB=t.tiBasis||"none", lcB=t.lcBasis||"none";
+      const onTermRent=lcB==="pct"||lcB==="market"&&M.lcBasis!=="psf";
+      const termRent=kLC!==null&&onTermRent?commissionableRent(fullTerm,S.lcNetFree!==false,
+        band?band.a-s:0,band?band.b-s:fullTerm.rent.length-1):0;
       const tiV=kTI===null?0: tiB==="psf"?num(t.tiAmt)*tsf : tiB==="amt"?num(t.tiAmt)
                : tiB==="market"?M.tiNew*tsf*infAt(kTI) : 0;
       const firstMo=res[0]?res[0].monthly:0;
@@ -569,7 +618,10 @@ function calc(S){
                : lcB==="amt"?num(t.lcAmt) : lcB==="months"?num(t.lcAmt)*firstMo
                : lcB==="market"?((M.lcBasis==="psf")?M.lcNew*tsf*infAt(kLC):M.lcNew*termRent) : 0;
       if(kTI!==null) payInto(S,sp.ti,kTI,tiV,t.tiTiming);
-      if(kLC!==null) payInto(S,sp.lc,kLC,lcV,t.lcTiming);
+      if(kLC!==null){
+        if(band&&onTermRent) band.commission={month:kLC,amount:lcV};
+        else payInto(S,sp.lc,kLC,lcV,t.lcTiming);
+      }
       // tenant incentives: cash beyond TI, paid on a date, optionally timed
       if(t.incBasis&&t.incBasis!=="none"&&num(t.incAmt)>0){ const iS=sSer(t.incDate||t.start), kI=iS!==null?serToIdx(iS,S):null;
         const r1=sp.schedule&&sp.schedule[0]?sp.schedule[0].monthly:0;
@@ -612,11 +664,11 @@ function calc(S){
       const res2=[]; for(let yy=0;yy*12<n;yy++)
         res2.push({ser:addMo(oS,yy*12),monthly:r0*Math.pow(1+num(t.optStep),yy)*tsf/12});
       const oF=Math.max(num(t.optFree),0);
-      const W2=walkLease(S,nM,oS,oE,tsf,res2,0,t.optCpi?byId(S.cpis,t.optCpi):null,
-        oF>0?[{from:oS,to:addMo(oS,Math.round(oF)),pct:1,gross:false}]:[]);
+      const optionWindows=oF>0?[{from:oS,to:addMo(oS,Math.round(oF)),pct:1,gross:false}]:[];
+      const W2=walkLease(S,nM,oS,oE,tsf,res2,0,t.optCpi?byId(S.cpis,t.optCpi):null,optionWindows);
       const oRec=t.optRec||t.rec, oBY=t.optResetBase?recYearYM(S,Math.floor(oS/10000),Math.floor(oS/100)%100):inBY;
       mergeSeg(W2,oRec,oBY);
-      let oRent=0; res2.forEach((r,q)=>{ oRent+=r.monthly*Math.min(12,n-12*q); });
+      const oRent=num(t.optLC)?commissionableRent(wholeTermBaseRent(oS,oE,tsf,res2,optionWindows),S.lcNetFree!==false):0;
       const oi=serToIdx(oS,S);
       const oTI=num(t.optTI)*tsf, oLC=num(t.optLC)*oRent;
       if(oi>=0&&oi<nM){ payInto(S,sp.ti,oi,oTI,t.tiTiming); payInto(S,sp.lc,oi,oLC,t.lcTiming); }
@@ -624,7 +676,7 @@ function calc(S){
         ratePSF:r0,amtYr:r0*tsf,steps:res2.slice(1).map(r=>({label:labelSer(r.ser),psf:r.monthly*12/tsf,ser:r.ser})),
         freeMo:oF,downEff:0,pp:1,profile:(xp==="ContractRenewal"?"Contract renewal (":"Option (")+(ob==="pctMkt"?pc(oa,0)+" of market":ob==="psf"?"$"+oa.toFixed(2)+"/SF":pc(oa,1)+" over last")+")",
         recName:(byId(S.recs,oRec)||{}).name||"",ti:oTI,lc:oLC});
-      lastPSF=res2[res2.length-1].monthly*12/tsf;
+      lastPSF=res2[res2.length-1].monthly*cpiFactor(byId(S.cpis,t.optCpi),serMo(oE)-serMo(oS))*12/tsf;
       segEnd=oE; xp=t.optThen||"Market";
     }
     /* Hold over and month to month: the tenant stays past expiry on the final rate,
@@ -643,6 +695,7 @@ function calc(S){
           start:serISO(hS),end:serISO(hE),termM:serMo(hE)-serMo(hS)+1,ratePSF:rate,amtYr:rate*tsf,
           steps:[],freeMo:0,downEff:0,pp:1,profile:(xp==="HoldOver"?"Hold over at ":"Month to month at ")+pc(ph,0)+" of final rent",
           recName:(byId(S.recs,t.rec)||{}).name||"",ti:0,lc:0});
+        lastPSF=rate;
         segEnd=hE;
       }
       xp=t.hoThen||"Market";
@@ -651,7 +704,11 @@ function calc(S){
        breakpoint. Natural breakpoint is annual base rent over the rate. Computed on an
        annualised monthly basis; the reference models settle it by lease year. */
     const lastKpr=segEnd!==null?Math.min(serToIdx(segEnd,S),nM-1):-1; sp.prLastK=lastKpr;
-    prFill(S,t,sp.pr,sp.rent,sp.occ,()=>tsf,lastKpr,nM);
+    // An open-ended month-to-month projection has no contractual end at the forecast cutoff.
+    const openEnded=sp.chain.at(-1)?.kind==="Month-to-Month"&&!t.mtmEnd;
+    const contractEnd=openEnded?Infinity:segEnd;
+    if(band) band.contractEnd=contractEnd;
+    prFill(S,t,sp.pr,sp.rent,sp.occ,()=>tsf,lastKpr,nM,contractEnd);
     if(xp==="Vacate"||xp==="Reabsorb") return sp;   // Reabsorb space passes to Space Absorption; without a plan it stays vacant (confirmed by the Applied lease reference case)
     if(segEnd!==null&&segEnd!==endS) cursor=curAfter(segEnd,serToIdx(segEnd,S));
 
@@ -686,9 +743,6 @@ function calc(S){
       // Year one is uninflated either way when inflYearOne is off.
       // market rate grows on its named series; a 0% early column shows up here naturally
       // "% of Prior Rent": the renewal leg is struck off the expiring rate, not the market
-      const priorPSF=(cur>0&&sp.rent[Math.max(Math.floor(cur)-1,0)]>0)
-        ? sp.rent[Math.max(Math.floor(cur)-1,0)]*12/tsf : mkNew;
-      const renewRate=(M.mktRenew===null)?priorPSF*M.pctPrior:M.mktRenew*uF;
       // "Inflate Market Rates: Monthly" compounds each year's own rate month by month from
       // the analysis start, so a lease commencing in March carries two months of that year's
       // growth. Reference-model tie-out: Ballardvale's nine market leases, every rate to the cent.
@@ -699,7 +753,8 @@ function calc(S){
               return a>0 ? a*Math.pow(b/a,(c0-12*Y)/12) : a; })()
                        : Math.pow(1+M.growth,c0/12))
         : (M.growthRef ? SF_(M.growthRef,c0) : Math.pow(1+M.growth,Math.floor(cStart/12)));
-      const mrPSF=(pp*renewRate+(1-pp)*mkNew)*mGrow;
+      const renewRate=M.mktRenew===null?(lastPSF??mkNew*mGrow)*M.pctPrior:M.mktRenew*uF*mGrow;
+      const mrPSF=pp*renewRate+(1-pp)*mkNew*mGrow;
       // rent steps: % compounding, a $ amount per SF each year, or none
       const stepPSF=y=>rawMla.stepType==="amt"?mrPSF+num(rawMla.stepPct)*uF*y:rawMla.stepType==="none"?mrPSF:mrPSF*Math.pow(1+M.stepPct,y);
       const freeMo=pp*Math.max(M.frRenew,0)+(1-pp)*Math.max(M.frNew,0);
@@ -764,6 +819,7 @@ function calc(S){
         freeMo,downEff,pp,profile:rawMla.name,
         recName:(byId(S.recs,M.rec)||{}).name||"",ti:tiPSF*inf*tsf,
         lc:(M.lcBasis==="psf")?lcVal*inf*tsf:lcVal*gross});
+      lastPSF=stepPSF(Math.floor((termM-1)/12))*cpiFactor(M.cpi,termM-1);
       cur=cStart+termM; first=false;
       if(rawMla.uponExp==="vacate"||rawMla.uponExp==="reabsorb") break;   // the chain ends; the space stays vacant without an absorption plan
       if(rawMla.uponExp==="renew") forceRenew=true;                        // later market leases renew with certainty
@@ -1676,7 +1732,7 @@ function validateModel(S,R,onIssue){
   else if(A.noi[nY-1]<A.noi[0]*0.6)
     W("Cash flow","NOI falls "+(100*(1-A.noi[nY-1]/A.noi[0])).toFixed(0)+"% from year 1 to year "+nY,"");
   if(Math.abs(R.netRev)<1)
-    E("Valuation","Reversion is zero","The exit cap is applied to a forward NOI of zero, so the DCF carries no terminal value at all.");
+    E("Valuation","Reversion is zero","Review the NOI period, exit cap, selling costs, adjustments and deductions used to calculate net sale proceeds.");
   const dc=num(S.goingInCap)>0?A.noi[0]/num(S.goingInCap):0;
   if(dc>0&&R.pv>0){
     const gap=(R.pv-dc)/dc;
@@ -1841,24 +1897,47 @@ function absorbLeases(S){
    breakpoint, by sales category, with an optional second tier, accrued monthly on annualised
    sales or settled by lease year. The natural breakpoint is base rent over the rate, so it
    follows the rent schedule; area-changing leases pass the whole lease's rent and area. */
-function prFill(S,t,pr,rent,occ,areaAt,lastK,nM){
+function prFill(S,t,pr,rent,occ,areaAt,lastK,nM,contractEnd){
   const PRC=prCatsOf(t); if(!PRC.length) return;
   for(let i=0;i<=Math.min(lastK,nM-1);i++) pr[i]=0;
   const salesAt=(c,i)=>(c.basis==="psf"?c.sales*areaAt(i):c.sales)*seriesFactor(S,c.g,i);
   const bpAt=(c,i)=>c.bt==="amt"?c.bp:c.bt==="psf"?c.bp*areaAt(i):(rent[i]*12)/c.rate;
+  const secondBreakpointAt=(c,i)=>c.bt2==="psf"?c.bp2*areaAt(i):c.bp2;
   if(t.prSettle==="leaseyear"){
-    const s0=sSer(t.start), ls=s0!==null?serToIdx(s0,S):0;
-    for(let y0=ls-Math.ceil(Math.max(ls,0)/12)*12;y0<=lastK;y0+=12){
-      const a=Math.max(y0,0), b=Math.min(y0+11,lastK); if(b<a) continue;
-      let tot=0, last=-1;
-      for(const c of PRC){ let sl=0, bp=0;
-        for(let i=a;i<=b;i++){ if(occ[i]<=0) continue; sl+=salesAt(c,i)/12*occ[i]; bp+=bpAt(c,i)/12; last=i; }
-        tot+=prOver(c,sl,bp,areaAt(b),(b-a+1)/12); }
-      if(last>=0) pr[last]+=tot;
+    const leaseStart=sSer(t.start);
+    if(leaseStart===null||contractEnd===null||lastK<0) return;
+    const startMonth=serToIdx(leaseStart,S);
+    // Include the lease year straddling the analysis start, using its in-model months.
+    const firstYear=Math.max(0,Math.floor(-startMonth/12)-1);
+    for(let year=firstYear;;year++){
+      const from=addMo(leaseStart,year*12);
+      if(from>contractEnd||serToIdx(from,S)>lastK) break;
+      const to=Math.min(contractEnd,serAddDays(addMo(leaseStart,(year+1)*12),-1));
+      const due=serToIdx(to,S);
+      if(due<0) continue;
+      if(due>lastK) break; // Still accruing when the modeled months end.
+      const firstMonth=Math.max(0,serToIdx(from,S));
+      for(const c of PRC){
+        let sales=0, firstBreakpoint=0, secondBreakpoint=0;
+        for(let i=firstMonth;i<=due;i++){
+          if(occ[i]<=0) continue;
+          const first=serOfIdx(i,S,1), days=dim(Math.floor(first/10000),Math.floor(first/100)%100);
+          const last=first+days-1;
+          const leaseDays=Math.min(contractEnd,last)-Math.max(leaseStart,first)+1;
+          const periodDays=Math.min(to,last)-Math.max(from,first)+1;
+          // Split a shared anniversary month by the occupied days in each lease year.
+          const occupiedYears=Math.min(occ[i],leaseDays/days)*(periodDays/leaseDays)/12;
+          sales+=salesAt(c,i)*occupiedYears;
+          firstBreakpoint+=bpAt(c,i)*occupiedYears;
+          secondBreakpoint+=secondBreakpointAt(c,i)*occupiedYears;
+        }
+        pr[due]+=prOver(c,sales,firstBreakpoint,secondBreakpoint);
+      }
+      if(to===contractEnd) break;
     }
   } else for(let i=0;i<=lastK;i++){
     if(occ[i]<=0) continue;
-    let acc=0; for(const c of PRC) acc+=prOver(c,salesAt(c,i),bpAt(c,i),areaAt(i))/12*occ[i];
+    let acc=0; for(const c of PRC) acc+=prOver(c,salesAt(c,i),bpAt(c,i),secondBreakpointAt(c,i))/12*occ[i];
     pr[i]=acc;
   }
 }
@@ -1871,10 +1950,10 @@ function prCatsOf(t){
   return num(t.prRate)>0?[{sales:num(t.prSales),basis:t.prSalesBasis||"amt",g:t.prGrowthRef||"gen",rate:num(t.prRate),bt:t.prBreakType||"natural",
     bp:num(t.prBreak),rate2:num(t.prRate2),bp2:num(t.prBreak2),bt2:t.prBreak2Basis||"amt"}]:[];
 }
-// overage on annual sales over an annual breakpoint, with an optional second tier above bp2
-function prOver(c,sales,bp,tsf,frac){
+// Sales and both breakpoints are amounts for the same settlement period.
+function prOver(c,sales,bp,secondBreakpoint){
   if(!(c.rate2>0&&c.bp2>0)) return Math.max(0,sales-bp)*c.rate;
-  const b2=Math.max((c.bt2==="psf"?c.bp2*tsf:c.bp2)*(frac===undefined?1:frac),bp);   // a partial lease year prorates both tiers
+  const b2=Math.max(secondBreakpoint,bp);
   return Math.max(0,Math.min(sales,b2)-bp)*c.rate+Math.max(0,sales-b2)*c.rate2;
 }
 /* Ranges: bands with a rate, applied marginally (each band's rate on
@@ -1882,7 +1961,7 @@ function prOver(c,sales,bp,tsf,frac){
 function rangeAmt(S,id,v){ const r=byId(S.ranges,id); if(!r) return 0;
   const E=(r.entries||[]).map(e=>({f:num(e.from),t:(e.to===""||e.to===null||e.to===undefined||num(e.to)<=0)?Infinity:num(e.to),r:num(e.rate)})).sort((a,b)=>a.f-b.f);
   if(!E.length) return 0;
-  if(r.mode==="whole"){ const e=E.find(e=>v>=e.f&&v<e.t)||E[E.length-1]; return e.r*v; }
+  if(r.mode==="whole"){ const e=E.find(e=>v>=e.f&&v<e.t); return e?e.r*v:0; }
   return E.reduce((a,e)=>a+e.r*Math.max(0,Math.min(v,e.t)-e.f),0); }
 /* Resale adjustments and deductions: adjustments move
    the gross sale price to an adjusted price, cost of sale applies to that, deductions come off
@@ -2082,13 +2161,17 @@ function buildDebt(S,nM,nY,basis,leaseCostM){
       if(amort&&i>=ioEnd){
         // the payment is struck when amortization starts, and re-struck only when a draw or a reset changes it
         if(pmtRate!==ir){ if(amStart===null) amStart=i; const left=Math.max(nAm-(i-amStart),1);
-          pmt=(ir===0)?bal/left:bal*ir/(1-Math.pow(1+ir,-left)); pmtRate=ir; if(x.pmt0===null) x.pmt0=pmt; }
+          if(ir===0) pmt=bal/left;
+          // For tiny coupons, 1 + ir can round to 1 and erase the entire annuity denominator.
+          else if(Math.abs(ir)<Math.sqrt(Number.EPSILON)) pmt=bal*(ir/-Math.expm1(-left*Math.log1p(ir)));
+          else pmt=bal*ir/(1-Math.pow(1+ir,-left));
+          pmtRate=ir; if(x.pmt0===null) x.pmt0=pmt; }
         prin=Math.min(bal,Math.max(0,pmt-int));
       }
       const ds=int+prin; bal=Math.max(0,bal-prin);
-      x.int[i]=int; x.prin[i]=Math.min(prin,int+prin); x.ds[i]=ds; x.rate[i]=r;
+      x.int[i]=int; x.prin[i]=prin; x.ds[i]=ds; x.rate[i]=r;
       out.dsM[i]+=ds; out.intM[i]+=int; out.prinM[i]+=x.prin[i];
-      if(i===mat&&mat<hold){ x.balloon[i]=bal*(1+xf); out.balloonM[i]+=bal*(1+xf); bal=0; x.bal[i]=0; break; }
+      if(i===mat){ x.balloon[i]=bal*(1+xf); out.balloonM[i]+=bal*(1+xf); bal=0; x.bal[i]=0; break; }
       x.bal[i]=bal; out.balM[i]+=bal;
     }
     out.loans.push(x);

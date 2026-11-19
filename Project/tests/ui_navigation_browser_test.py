@@ -27,6 +27,26 @@ class UINavigationBrowserTests(unittest.TestCase):
         self.assertGreater(self.page.get_by_role('option').count(), 0)
         self.page.keyboard.press('Escape')
 
+    def test_jump_dialog_owns_shortcuts_and_respects_focused_buttons(self):
+        self.page.evaluate("setMode('inputs');go('tenants','rr')")
+        before = self.page.evaluate("[MODE, T1, T2, JSON.stringify(S)]")
+        self.page.keyboard.press('Control+k')
+        dialog = self.page.get_by_role('dialog', name='Jump to workspace')
+        self.page.keyboard.press('Insert')
+        self.page.keyboard.press('Alt+r')
+        self.assertEqual(self.page.evaluate("[MODE, T1, T2, JSON.stringify(S)]"), before)
+        dialog.get_by_role('button', name='Close search').focus()
+        self.page.keyboard.press('Enter')
+        expect(dialog).not_to_be_visible()
+        self.assertEqual(self.page.evaluate("[MODE, T1, T2]"), before[:3])
+
+        self.page.keyboard.press('Control+k')
+        target = dialog.get_by_role('option', name='Operating Plan', exact=False)
+        target.focus()
+        self.page.keyboard.press('Enter')
+        expect(dialog).not_to_be_visible()
+        self.assertEqual(self.page.evaluate("[MODE, T1, T2]"), ['inputs', 'expenses', 'op'])
+
     def test_file_actions_keep_keyboard_focus_during_refresh(self):
         self.page.evaluate("setMode('portfolio')")
         harness.open_library_actions(self.page)
