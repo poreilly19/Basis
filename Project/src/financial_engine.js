@@ -512,10 +512,25 @@ function calc(S){
       // An upfront commission pays for the whole lease, including a future expansion.
       if(L.commission)payInto(S,sp.lc,L.commission.month,L.commission.amount,L.t.lcTiming);
       if(L.label) sp.name=(sp.name||tt.name||"")+L.label; out.push({sp,a:L.a,b:L.b,contractEnd:L.contractEnd}); }
-    if(out.length>1&&prCatsOf(tt).length){          // percentage rent on the lease as a whole
-      const b0=out[0].sp, tot=new Float64Array(nM), area=new Float64Array(nM);
-      for(const B of out) for(let i=0;i<nM;i++){ tot[i]+=B.sp.rent[i]; if(i>=B.a&&i<=B.b) area[i]+=B.sp.sf; }
-      prFill(S,tt,b0.pr,tot,b0.occ,i=>area[i],b0.prLastK,nM,out[0].contractEnd); }
+    if(out.length&&prCatsOf(tt).length){
+      // Calculate percentage rent once from occupied area and rent across the
+      // whole lease. A band can be absent during accrual or on the payment date.
+      const carrier=out.reduce((latest,b)=>b.contractEnd>latest.contractEnd?b:latest);
+      const rent=Z(),area=Z(),occupiedArea=Z();
+      for(const B of out){
+        for(let i=Math.max(0,B.a);i<=Math.min(B.b,B.sp.prLastK);i++){
+          area[i]+=B.sp.sf;
+          occupiedArea[i]+=B.sp.sf*B.sp.occ[i];
+          rent[i]+=B.sp.rent[i]*B.sp.occ[i];
+        }
+      }
+      const occupancy=Z();
+      for(let i=0;i<nM;i++){
+        occupancy[i]=area[i]>0?occupiedArea[i]/area[i]:0;
+        if(occupancy[i]>0) rent[i]/=occupancy[i]; // convert collected rent to a whole-month rate
+      }
+      prFill(S,tt,carrier.sp.pr,rent,occupancy,i=>area[i],carrier.sp.prLastK,nM,carrier.contractEnd);
+    }
     return out; };
   const maskSpace=(sp,a,b)=>{ for(let i=0;i<nM;i++){ if(i>=a&&i<=b) continue;
     sp.rent[i]=0; sp.cpiAdj[i]=0; sp.occ[i]=0; sp.abate[i]=0; sp.ti[i]=0; sp.lc[i]=0; if(sp.pr) sp.pr[i]=0; if(sp.inc) sp.inc[i]=0; if(sp.sl) sp.sl[i]=0; } };
@@ -708,7 +723,7 @@ function calc(S){
     const openEnded=sp.chain.at(-1)?.kind==="Month-to-Month"&&!t.mtmEnd;
     const contractEnd=openEnded?Infinity:segEnd;
     if(band) band.contractEnd=contractEnd;
-    prFill(S,t,sp.pr,sp.rent,sp.occ,()=>tsf,lastKpr,nM,contractEnd);
+    else prFill(S,t,sp.pr,sp.rent,sp.occ,()=>tsf,lastKpr,nM,contractEnd);
     if(xp==="Vacate"||xp==="Reabsorb") return sp;   // Reabsorb space passes to Space Absorption; without a plan it stays vacant (confirmed by the Applied lease reference case)
     if(segEnd!==null&&segEnd!==endS) cursor=curAfter(segEnd,serToIdx(segEnd,S));
 

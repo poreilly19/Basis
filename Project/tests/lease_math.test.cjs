@@ -128,3 +128,24 @@ test('annual steps continue throughout a supported 100-year lease', () => {
   const expected = .05 * 12000 * Math.expm1(100 * Math.log1p(.01)) / .01;
   near(calc(s).monthly.lc[0], expected);
 });
+
+test('percentage rent accrues only while the tenant occupies area and settles on the contractual payment date', () => {
+  // $120/SF annual sales on 1,000 SF at 10% = $1,000 per occupied month.
+  const cases=[
+    {sf:0, areaSched:[{date:'2026-04',sf:1000}], months:[3,4,5,6,7,8,9,10,11]},
+    {sf:1000, areaSched:[{date:'2026-04',sf:0},{date:'2026-07',sf:1000}], months:[0,1,2,6,7,8,9,10,11]},
+    {sf:1000, areaSched:[{date:'2026-04',sf:0}], months:[0,1,2]}
+  ];
+  for(const {sf,areaSched,months} of cases){
+    for(const prSettle of ['monthly','leaseyear']){
+      const s=property({sf,areaSched,start:'2026-01',end:'2026-12',lcBasis:'none',
+        prOn:true,prSettle,prSalesBasis:'psf',prSales:120,prRate:.1,prBreakType:'amt',prBreak:0});
+      const r=calc(s);
+      near(r.ann.pr[0],1000*months.length);
+      for(let m=0;m<12;m++){
+        const expected=prSettle==='leaseyear'?(m===11?1000*months.length:0):(months.includes(m)?1000:0);
+        near(r.monthly.pr[m],expected);
+      }
+    }
+  }
+});

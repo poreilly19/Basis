@@ -341,6 +341,7 @@ The tests in `tests/financial.test.cjs` and `tests/lease_math.test.cjs` use stat
 |---|---|
 | $480,000 in annual retail sales, 15 occupied days in April, 5% above $120,000 and 10% above $240,000 | Sales of $20,000 and tier thresholds of $5,000 and $10,000 generate $1,250 in rent. |
 | Sales at $200/SF, six months at 1,000 SF and six at 2,000 SF, 5% on sales up to $100/SF and 10% above | $300,000 of sales produce a $22,500 year-end payment. |
+| 1,000 SF occupied in January–March and July–December, with sales at $120/SF/year and 10% rent above zero | Nine occupied months earn $9,000. Annual settlement pays in December. Monthly settlement pays $1,000 in each occupied month. |
 | $2,900 monthly contractual rent and a 5% commission for February 29 alone | $100 of base rent earns a $5 commission. |
 | $1,000/month contractual rent and a 5% commission for a full year, with a midyear change in area | The rent stays at $12,000 for the year and the commission is $600. Area changes apply by calendar month. |
 | 75% chance of renewal at 90% of $12/SF, otherwise a new lease at an inflation-adjusted $22/SF | Blended rent is $13.60/SF. |
